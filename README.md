@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="client/public/brand-logo.svg" alt="Happening Logo" width="80" />
+</p>
+
 # Happening – Multi‑Tenant Event Booking Platform
 
 Happening lets organizations create and manage events while users book seats with real‑time availability and waitlist promotion.
@@ -91,10 +95,7 @@ Troubleshooting
 - Redis: check counters and lists (docker exec into redis and use redis‑cli)
 - RabbitMQ: http://localhost:15672 (queue "notifications")
 
-Screenshots
 
-<details>
-  <summary>Click to expand gallery</summary>
 
 <!-- Client overview -->
 
@@ -165,5 +166,3 @@ Grouped view of your bookings, with tools to view seat allocations and cancel pe
 ![Redis & RabbitMQ used for queuing and notifications](ABOUT_PROJECT/Images/UsedRedisAndRabbitMqForQueueAndNotificationsWhileAssigingSeats.png)
 
 Concurrency‑safe counters in Redis guarantee consistent availability. RabbitMQ drives notification events (confirmations, waitlist promotions).
-
-</details>
