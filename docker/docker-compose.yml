@@ -1,0 +1,94 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.6
+    container_name: happening-keycloak
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: true
+      KC_METRICS_ENABLED: true
+      KC_LOG_LEVEL: INFO
+    ports:
+      - "8080:8080"
+    volumes:
+      - happening_keycloak_data:/opt/keycloak/data
+      - ./keycloak-themes:/opt/keycloak/themes:ro
+    networks:
+      - happening_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;grep -q '200 OK' <&3"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  postgres:
+    image: postgres:15
+    container_name: happening-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: happeninguser
+      POSTGRES_PASSWORD: happeningpass
+      POSTGRES_DB: happeningdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - happening_postgres_data:/var/lib/postgresql/data
+    networks:
+      - happening_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happeninguser -d happeningdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: happening-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - happening_redis_data:/data
+    networks:
+      - happening_net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: happening-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: happening
+      RABBITMQ_DEFAULT_PASS: happening
+    networks:
+      - happening_net
+
+  notifications-worker:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    container_name: happening-notifications-worker
+    command: ["npm", "run", "worker:notifications"]
+    environment:
+      - RABBITMQ_URL=amqp://happening:happening@rabbitmq:5672
+    depends_on:
+      - rabbitmq
+    networks:
+      - happening_net
+
+volumes:
+  happening_keycloak_data:
+  happening_postgres_data:
+  happening_redis_data:
+
+networks:
+  happening_net:
+    driver: bridge

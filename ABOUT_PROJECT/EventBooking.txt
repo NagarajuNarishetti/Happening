@@ -1,0 +1,343 @@
+🎟️ Project Specification: Multi-Tenant Event Booking & Notification Platform
+1. Overview
+
+We are building a multi-tenant event booking platform called Happening, similar to BookMyShow / Eventbrite, with the following goals:
+
+Multi-tenant organizations can onboard and manage their own events.
+
+Users can book seats for events in real-time.
+
+If slots are full, users are automatically placed in a waitlist (FCFS).
+
+Redis handles concurrency for seat allocation & waitlist.
+
+RabbitMQ is used for async notifications (email, push, SMS).
+
+PostgreSQL is the source of truth (audit logs, history, reporting).
+
+Authentication and user management are handled by Keycloak (with support for social logins: Google, GitHub, etc.).
+
+2. Core Features
+🔐 Authentication & Multi-Tenancy
+
+Login via Keycloak (supports Google/GitHub).
+
+When a user signs up, an Organization is created (with that user as orgAdmin).
+
+Users can be invited to organizations with roles:
+
+orgAdmin → manages organization settings & members.
+
+Organizer → creates & manages events.
+
+User → books tickets.
+
+🎭 Events
+
+Events belong to an organization.
+
+Fields: name, description, category (Concert, Webinar, Hackathon), event date/time, total slots, available slots, status.
+
+Event lifecycle:
+
+upcoming → ongoing → completed or cancelled.
+
+🎟️ Booking & Waitlist
+
+Users can book seats:
+
+If slots are available → booking is confirmed.
+
+If slots are full → booking is waiting (placed in waitlist).
+
+Bookings track:
+
+Seats reserved
+
+Status: confirmed, waiting, cancelled
+
+waiting_number for queue ordering
+
+When a booking is cancelled, waitlist users are promoted (FCFS).
+
+📨 Notifications
+
+Notification events include:
+
+Booking confirmed
+
+Booking waitlisted
+
+Booking cancelled
+
+Waitlist promoted
+
+Event updated
+
+Stored in DB and delivered by a RabbitMQ worker.
+
+📜 History & Auditing
+
+Every booking change (create, cancel, promotion) is stored in booking_history.
+
+Full audit log of org membership, event updates, and notifications.
+
+3. Tech Stack
+
+Frontend: Next.js (with Keycloak integration).
+
+Backend: Node.js (NestJS/Express) or Java (Spring Boot).
+
+Auth: Keycloak (with social logins).
+
+Database: PostgreSQL.
+
+Cache/Queue: Redis (seat counters + waitlist).
+
+Message Broker: RabbitMQ (notifications).
+
+Deployment: Docker + Kubernetes.
+
+4. Database Schema (PostgreSQL)
+-- Organizations
+-- Users
+-- Organization Users
+-- Events
+-- Bookings
+-- Booking History
+-- Notifications
+-- Organization Invites
+-- Triggers & Functions
+
+
+👉 Use the schema we finalized earlier (already optimized with constraints, triggers, audit tables, and waitlist support).
+
+5. Redis Data Structures (for concurrency & waitlist)
+
+Event Slot Counter
+
+Key: event:{eventId}:slots
+
+Type: integer
+
+Tracks available slots.
+
+Event Waitlist Queue
+
+Key: event:{eventId}:waitlist
+
+Type: list
+
+Stores userId in FCFS order.
+
+Booking Lock
+
+Key: booking:{eventId}:{userId}
+
+Type: string (short TTL)
+
+Prevents duplicate booking requests.
+
+6. Booking Flow (Algorithm)
+
+User requests booking (N seats):
+
+Check Redis lock → reject if duplicate.
+
+Atomically decrement event:{eventId}:slots by N.
+
+If result ≥ 0 → booking confirmed.
+
+If result < 0 → revert decrement and push user into event:{eventId}:waitlist.
+
+Write booking status to PostgreSQL.
+
+User cancels booking:
+
+Increment event:{eventId}:slots.
+
+Pop next user from event:{eventId}:waitlist.
+
+Update their booking → promote from waiting → confirmed.
+
+Push notification event to RabbitMQ.
+
+7. Notifications (RabbitMQ Workers)
+
+Producers: Backend services push notification jobs (e.g., booking confirmed).
+
+Consumers: Workers consume queue and send notifications (email, SMS, push).
+
+Store status in notifications table (sent, failed, pending).
+
+8. Organization Management
+
+Invites: Admin can invite users via email (token stored in DB).
+
+Roles: orgAdmin, Organizer, User.
+
+RBAC enforced via middleware (check user role from Keycloak & DB).
+
+9. Example User Journeys
+Journey 1: Event Creation
+
+orgAdmin invites Organizer.
+
+Organizer creates event with 50 slots.
+
+Event published → visible to Users.
+
+Journey 2: Booking
+
+User books 2 seats.
+
+Redis decrements slots → confirmed.
+
+Booking + history saved in DB.
+
+Notification sent.
+
+Journey 3: Waitlist Promotion
+
+Event is full.
+
+New User books → added to waitlist.
+
+An existing booking is cancelled.
+
+Redis increments slot, promotes waitlist user.
+
+Notification sent.
+
+10. Deployment & Infra
+
+Docker Compose (local): PostgreSQL, Redis, RabbitMQ, Keycloak.
+
+Kubernetes (prod): Each service containerized.
+
+CI/CD: GitHub Actions for build/test/deploy.
+
+Monitoring: Prometheus + Grafana.
+
+PostgreSQL scheme just for sample reference 
+
+-- ================================
+-- Users & Organizations
+-- ================================
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    keycloak_id TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    full_name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    owner_id UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- user <-> org relationship
+CREATE TABLE organization_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('orgAdmin','organizer','user')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(org_id, user_id)
+);
+
+-- ================================
+-- Events
+-- ================================
+
+CREATE TABLE events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    category TEXT CHECK (category IN ('webinar','concert','hackathon')),
+    event_date TIMESTAMP NOT NULL,
+    total_slots INT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ================================
+-- Bookings & Waitlist
+-- ================================
+
+CREATE TABLE bookings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    seats INT NOT NULL CHECK (seats > 0),
+    status TEXT NOT NULL CHECK (status IN ('confirmed','waiting','cancelled')),
+    waiting_number INT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- History / audit of booking actions
+CREATE TABLE booking_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    action TEXT NOT NULL CHECK (action IN ('created','cancelled','promoted')),
+    details JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ================================
+-- Notifications
+-- ================================
+
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('booking_confirmed','booking_waitlisted','booking_cancelled','waitlist_promoted','event_updated')),
+    message TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending','sent','failed')) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ================================
+-- Invites
+-- ================================
+
+CREATE TABLE org_invites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('organizer','user')),
+    token TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending','accepted','expired')) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ================================
+-- Triggers (Example)
+-- ================================
+
+-- Auto-update timestamp
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_update_events
+BEFORE UPDATE ON events
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER trg_update_bookings
+BEFORE UPDATE ON bookings
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
