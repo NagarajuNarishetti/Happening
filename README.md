@@ -90,3 +90,80 @@ Troubleshooting
 - API health: GET / (root) and GET /db-test
 - Redis: check counters and lists (docker exec into redis and use redis‑cli)
 - RabbitMQ: http://localhost:15672 (queue "notifications")
+
+Screenshots
+
+<details>
+  <summary>Click to expand gallery</summary>
+
+<!-- Client overview -->
+
+![Client App](ABOUT_PROJECT/Images/happening-client.png)
+
+Small overview of the Next.js client home/dashboard with organization switcher, sections for Upcoming Events and Your Events.
+
+<!-- Server overview -->
+
+![Server App](ABOUT_PROJECT/Images/happening-server.png)
+
+High‑level look at the Express API and workers; routes handle events, bookings, organizations, and a background notifications worker.
+
+<!-- Login + Keycloak theme -->
+
+![Login with custom Keycloak theme](ABOUT_PROJECT/Images/LoginPageWithCustomeKeyClockThemeAndSocialLogins.png)
+
+Custom Keycloak theme branding with Google and GitHub social login buttons styled to brand colors.
+
+<!-- Create/host events (organizers) -->
+
+![Organizers can host events](ABOUT_PROJECT/Images/OrganisersCanHostEvents.png)
+
+Organizers create events specifying category, date/time, description and capacity. UI provides clear stats per event.
+
+<!-- Switch organization feature -->
+
+![Switch organization](ABOUT_PROJECT/Images/FeatureToSwitchOrganisation.png)
+
+Multi‑tenant navigation: quickly switch context to another organization’s workspace while keeping permissions scoped.
+
+<!-- Invitations -->
+
+![Invite to organization](ABOUT_PROJECT/Images/CanInviteToOrganizationAsUserAndOrganizer.png)
+
+Invite users to organizations as viewer/user or organizer; role determines capabilities in the workspace.
+
+<!-- Filters -->
+
+![Choose events using filters](ABOUT_PROJECT/Images/CanChooseEventsByApplyingFilters.png)
+
+Powerful filters for Upcoming/Your Events: by status (upcoming/completed), organization, and date sort.
+
+<!-- Seat selection + booking -->
+
+![Select and book seats](ABOUT_PROJECT/Images/SelectAndBookDesiredTickets.png)
+
+Per‑seat booking modal with live availability grid; pick exact seats or request a quantity.
+
+<!-- Waitlist behavior -->
+
+![Waitlist and FIFO assignment](ABOUT_PROJECT/Images/WhenSeatsAreFullAddedToWatingListAndLaterTicketsAssignedUsingFIFO.png)
+
+If demand exceeds supply, bookings join a waitlist. As seats free up, promotions happen first‑come‑first‑served and seat numbers are assigned.
+
+<!-- Manage / cancel seats -->
+
+![Cancel desired seats](ABOUT_PROJECT/Images/CanCancleTheDesiredSelectedTickets.png)
+
+Users can cancel specific seat numbers from their booking; availability updates instantly.
+
+![Manage all booked tickets](ABOUT_PROJECT/Images/CanManageAllBookedTickets.png)
+
+Grouped view of your bookings, with tools to view seat allocations and cancel per‑booking or per‑seat.
+
+<!-- Redis + RabbitMQ architecture note -->
+
+![Redis & RabbitMQ used for queuing and notifications](ABOUT_PROJECT/Images/UsedRedisAndRabbitMqForQueueAndNotificationsWhileAssigingSeats.png)
+
+Concurrency‑safe counters in Redis guarantee consistent availability. RabbitMQ drives notification events (confirmations, waitlist promotions).
+
+</details>
