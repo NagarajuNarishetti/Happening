@@ -324,26 +324,38 @@ export default function MediaPage({ keycloak }) {
                                     .map((ev) => {
                                         const org = organizations.find(o => String(o.id) === String(ev.org_id));
                                         return (
-                                            <div key={ev.id} className="group relative rounded-2xl border border-emerald-200 bg-white shadow-2xl p-4">
-                                                <div className="flex items-start justify-between mb-1">
-                                                    <div className="text-lg font-semibold text-gray-800">{ev.name}</div>
+                                            <div key={ev.id} className="group relative rounded-2xl border border-emerald-200 bg-white shadow-2xl p-4 h-full flex flex-col">
+                                                {/* Header Section - Fixed Height */}
+                                                <div className="flex items-start justify-between mb-3 h-8">
+                                                    <div className="text-lg font-semibold text-gray-800 line-clamp-1 flex-1 pr-2">{ev.name}</div>
                                                     <span className="ml-3 shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" title={org?.name || ''}>{org?.name || ''}</span>
                                                 </div>
-                                                <div className="text-sm text-gray-600 mb-2 line-clamp-2">{ev.description || "No description"}</div>
-                                                <div className="text-xs text-gray-500 mb-2">
-                                                    <span className="font-medium">Organizer:</span> {ev.organizer_first_name && ev.organizer_last_name
+
+                                                {/* Description Section - Fixed Height */}
+                                                <div className="text-sm text-gray-600 mb-3 h-10 line-clamp-2 overflow-hidden">{ev.description || "No description"}</div>
+
+                                                {/* Organizer Section - Fixed Height */}
+                                                <div className="text-xs text-gray-500 mb-3 h-5 flex items-center">
+                                                    <span className="font-medium">Organizer:</span>
+                                                    <span className="ml-1 truncate">{ev.organizer_first_name && ev.organizer_last_name
                                                         ? `${ev.organizer_first_name} ${ev.organizer_last_name}`
-                                                        : ev.organizer_username || 'Unknown'}
+                                                        : ev.organizer_username || 'Unknown'}</span>
                                                 </div>
-                                                <div className="flex items-center justify-between text-sm text-gray-700">
-                                                    <span>{ev.category || 'event'}</span>
-                                                    <span>{ev.event_date ? new Date(ev.event_date).toLocaleString() : ''}</span>
+
+                                                {/* Category & Date Section - Fixed Height */}
+                                                <div className="flex items-center justify-between text-sm text-gray-700 mb-3 h-6">
+                                                    <span className="font-medium">{ev.category || 'event'}</span>
+                                                    <span className="text-xs">{ev.event_date ? new Date(ev.event_date).toLocaleString() : ''}</span>
                                                 </div>
-                                                <div className="flex items-center justify-between mt-3 text-xs text-gray-600">
+
+                                                {/* Capacity Section - Fixed Height */}
+                                                <div className="flex items-center justify-between text-xs text-gray-600 mb-4 h-5">
                                                     <span>Total: {ev.total_slots}</span>
                                                     <span>Available: {ev.available_slots}</span>
                                                 </div>
-                                                <div className="mt-4 flex items-center gap-2">
+
+                                                {/* Action Button Section - Fixed at Bottom */}
+                                                <div className="mt-auto flex items-center gap-2">
                                                     <button onClick={async () => {
                                                         try {
                                                             const res = await API.get(`/events/${ev.id}/seats`);
@@ -510,26 +522,38 @@ export default function MediaPage({ keycloak }) {
                                 {events.filter(ev => organizerOrgIds.has(ev.org_id) && String(ev.created_by) === String(currentUserId)).filter(ev => !isSwitchView || String(ev.org_id) === String(switchOrgId)).map((ev) => {
                                     const org = organizations.find(o => o.id === ev.org_id);
                                     return (
-                                        <div key={`org-${ev.id}`} className="rounded-2xl border border-gray-200 bg-white p-4 shadow">
-                                            <div className="flex items-center justify-between">
-                                                <div className="text-lg font-semibold text-gray-800">{ev.name}</div>
-                                                <span className="text-xs text-gray-500">{org?.name || '—'}</span>
+                                        <div key={`org-${ev.id}`} className="rounded-2xl border border-gray-200 bg-white p-4 shadow h-full flex flex-col">
+                                            {/* Header Section - Fixed Height */}
+                                            <div className="flex items-center justify-between mb-3 h-8">
+                                                <div className="text-lg font-semibold text-gray-800 line-clamp-1 flex-1 pr-2">{ev.name}</div>
+                                                <span className="text-xs text-gray-500 shrink-0">{org?.name || '—'}</span>
                                             </div>
-                                            <div className="text-sm text-gray-600 mt-1 line-clamp-2">{ev.description || 'No description'}</div>
-                                            <div className="text-xs text-gray-500 mt-1 mb-2">
-                                                <span className="font-medium">Organizer:</span> {ev.organizer_first_name && ev.organizer_last_name
+
+                                            {/* Description Section - Fixed Height */}
+                                            <div className="text-sm text-gray-600 mb-3 h-10 line-clamp-2 overflow-hidden">{ev.description || 'No description'}</div>
+
+                                            {/* Organizer Section - Fixed Height */}
+                                            <div className="text-xs text-gray-500 mb-3 h-5 flex items-center">
+                                                <span className="font-medium">Organizer:</span>
+                                                <span className="ml-1 truncate">{ev.organizer_first_name && ev.organizer_last_name
                                                     ? `${ev.organizer_first_name} ${ev.organizer_last_name}`
-                                                    : ev.organizer_username || 'Unknown'}
+                                                    : ev.organizer_username || 'Unknown'}</span>
                                             </div>
-                                            <div className="flex items-center justify-between text-xs text-gray-600 mt-2">
-                                                <span>{ev.category}</span>
-                                                <span>{ev.event_date ? new Date(ev.event_date).toLocaleString() : ''}</span>
+
+                                            {/* Category & Date Section - Fixed Height */}
+                                            <div className="flex items-center justify-between text-xs text-gray-600 mb-3 h-6">
+                                                <span className="font-medium">{ev.category}</span>
+                                                <span className="text-xs">{ev.event_date ? new Date(ev.event_date).toLocaleString() : ''}</span>
                                             </div>
-                                            <div className="flex items-center justify-between mt-3 text-xs text-gray-600">
+
+                                            {/* Capacity Section - Fixed Height */}
+                                            <div className="flex items-center justify-between text-xs text-gray-600 mb-4 h-5">
                                                 <span>Total: {ev.total_slots}</span>
                                                 <span>Available: {ev.available_slots}</span>
                                             </div>
-                                            <div className="mt-4 flex items-center gap-2">
+
+                                            {/* Action Buttons Section - Fixed at Bottom */}
+                                            <div className="mt-auto flex items-center gap-2">
                                                 <button onClick={() => { setEditingEvent(ev); setEditDescription(ev.description || ""); setShowEditModal(true); }} className="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold">Edit</button>
                                                 <button onClick={async () => {
                                                     if (!confirm('Delete this event?')) return;
