@@ -41,15 +41,35 @@ export default function MediaPage({ keycloak }) {
     const socketRef = useRef(null);
     const heartbeatRef = useRef(null);
     const router = useRouter();
+    const [selectedOrgId, setSelectedOrgId] = useState("");
     const switchOrgId = router?.query?.id || router?.query?.orgId || null;
     const isSwitchView = Boolean(switchOrgId);
 
-    const toLower = (v) => String(v || '').toLowerCase();
+    const toLower = (v) => String(v || '').toLowerCase().trim();
+    const isOrganizerRole = (role) => {
+        const r = toLower(role);
+        return r === 'organizer' || r === 'agent' || r === 'reviewer' || r === 'orgadmin' || r === 'owner';
+    };
+    const isBookingRole = (role) => {
+        const r = toLower(role);
+        return r === 'user' || r === 'customer' || r === 'viewer';
+    };
+    const displayRole = (role) => {
+        const r = toLower(role);
+        if (r === 'orgadmin' || r === 'owner') return 'OrgAdmin';
+        if (r === 'agent' || r === 'reviewer' || r === 'organizer') return 'Organizer';
+        return 'User';
+    };
+    const getRoleBadgeColor = (role) => {
+        const r = toLower(role);
+        if (r === 'orgadmin' || r === 'owner') return 'bg-indigo-600/10 text-indigo-700 border-indigo-300';
+        if (r === 'agent' || r === 'reviewer' || r === 'organizer') return 'bg-emerald-600/10 text-emerald-700 border-emerald-300';
+        return 'bg-gray-600/10 text-gray-800 border-gray-300';
+    };
     const userOrgIdsForBooking = useMemo(() => {
         const ids = new Set();
         for (const o of organizations) {
-            const r = toLower(o.role);
-            if (r === 'user' || r === 'customer' || r === 'viewer') ids.add(o.id);
+            if (isBookingRole(o.role)) ids.add(o.id);
         }
         return ids;
     }, [organizations]);
@@ -57,8 +77,7 @@ export default function MediaPage({ keycloak }) {
     const organizerOrgIds = useMemo(() => {
         const ids = new Set();
         for (const o of organizations) {
-            const r = toLower(o.role);
-            if (r === 'organizer') ids.add(o.id);
+            if (isOrganizerRole(o.role)) ids.add(o.id);
         }
         return ids;
     }, [organizations]);
@@ -68,13 +87,23 @@ export default function MediaPage({ keycloak }) {
         const org = organizations.find(o => String(o.id) === String(switchOrgId));
         return toLower(org?.role);
     }, [organizations, isSwitchView, switchOrgId]);
-    const isSwitchOrganizer = switchOrgRole === 'organizer';
+    const isSwitchOrganizer = isOrganizerRole(switchOrgRole);
 
     // Selected organization details when viewing via /switch/[id]
     const switchedOrg = useMemo(() => {
         if (!isSwitchView) return null;
         return organizations.find(o => String(o.id) === String(switchOrgId)) || null;
     }, [organizations, isSwitchView, switchOrgId]);
+
+    // When switched into an org, default both filters to that org
+    useEffect(() => {
+        if (!isSwitchView || !switchOrgId) return;
+        // Only set if the org exists in the loaded organizations
+        const exists = organizations.some(o => String(o.id) === String(switchOrgId));
+        if (!exists) return;
+        setUpcomingOrgFilter(String(switchOrgId));
+        setYourOrgFilter(String(switchOrgId));
+    }, [isSwitchView, switchOrgId, organizations]);
 
     // Inline organization overview modal state
     const [showOrgModal, setShowOrgModal] = useState(false);
@@ -144,10 +173,8 @@ export default function MediaPage({ keycloak }) {
 
     const fetchEvents = async () => {
         try {
-            // Optionally filter by org in switch view to reduce payload
-            const query = [];
-            if (isSwitchView && switchOrgId) query.push(`org_id=${encodeURIComponent(String(switchOrgId))}`);
-            const res = await API.get(`/events${query.length ? `?${query.join('&')}` : ''}`);
+            // Always fetch all events; UI handles filtering so booked-event cards have metadata
+            const res = await API.get(`/events`);
             setEvents(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error("Error fetching events", err);
@@ -200,6 +227,17 @@ export default function MediaPage({ keycloak }) {
         init();
     }, [keycloak?.authenticated]);
 
+    // Default selected org in minimal view (exclude admin/owner roles)
+    useEffect(() => {
+        const selectable = organizations.filter(o => {
+            const r = toLower(o.role);
+            return !(r === 'orgadmin' || r === 'owner');
+        });
+        if (!selectedOrgId && selectable.length > 0) {
+            setSelectedOrgId(String(selectable[0].id));
+        }
+    }, [organizations, selectedOrgId]);
+
     // Heartbeat while seat modal is open
     useEffect(() => {
         if (showSeatSelect && seatSelect?.event?.id) {
@@ -242,6 +280,62 @@ export default function MediaPage({ keycloak }) {
         );
     }
 
+    // If user hasn't switched into an organization, still show a nice greeting header
+    if (!isSwitchView) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 p-6">
+                <div className="pt-10 px-8 pb-8">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="mb-10">
+                            <div className="relative overflow-hidden rounded-3xl border border-blue-200/60 bg-gradient-to-r from-white to-blue-50 shadow-xl">
+                                <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(ellipse_at_right,_rgba(59,130,246,0.15),_transparent_60%)]"></div>
+                                <div className="relative flex items-center justify-between px-6 sm:px-10 py-8">
+                                    <div className="min-w-0">
+                                        <div className="text-sm text-blue-700/80 font-semibold flex items-center gap-2">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
+                                            Signed in
+                                        </div>
+                                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                                            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-800">
+                                                {greeting}, {keycloak.tokenParsed?.preferred_username}
+                                            </h1>
+                                        </div>
+                                        <p className="mt-2 text-sm text-slate-600">Here’s what’s happening in your workspace today.</p>
+                                    </div>
+                                    <div className="flex-shrink-0">
+                                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold flex items-center justify-center shadow-lg border border-white/40">
+                                            {keycloak.tokenParsed?.preferred_username?.[0]?.toUpperCase?.()}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Switch panel */}
+                        <div className="max-w-xl w-full bg-white/80 backdrop-blur-2xl border border-blue-200/50 rounded-3xl shadow-2xl p-8 mx-auto text-center">
+                            <div className="mx-auto w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold mb-4">H</div>
+                            <h2 className="text-2xl font-extrabold text-slate-800 mb-2">Switch into an organization to continue</h2>
+                            <p className="text-slate-600 mb-6">Choose an organization to access booking and event features. You can switch organizations anytime from the navbar.</p>
+                            {organizations.filter(o => { const r = toLower(o.role); return !(r === 'orgadmin' || r === 'owner'); }).length > 0 ? (
+                                <div className="flex items-center justify-center gap-2 mb-6">
+                                    <select value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)} className="px-3 py-2 rounded-xl border bg-white text-sm min-w-[220px]">
+                                        {organizations.filter(o => { const r = toLower(o.role); return !(r === 'orgadmin' || r === 'owner'); }).map(o => (
+                                            <option key={`org-opt-${o.id}`} value={String(o.id)}>{o.name}</option>
+                                        ))}
+                                    </select>
+                                    <button onClick={() => router.push(`/switch/${encodeURIComponent(selectedOrgId)}`)} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">Switch</button>
+                                </div>
+                            ) : (
+                                <div className="mb-6 text-sm text-slate-500">No eligible organizations to switch. Ask an organizer to add you as a member.</div>
+                            )}
+                            <div className="text-xs text-slate-500">Tip: Switch organizations anytime from the navbar.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 p-6">
             <div className="pt-10 px-8 pb-2">
@@ -260,13 +354,16 @@ export default function MediaPage({ keycloak }) {
                                             {greeting}, {keycloak.tokenParsed?.preferred_username}
                                         </h1>
                                         {isSwitchView && switchedOrg?.name && (
-                                            <button
-                                                onClick={() => openOrgOverview(switchedOrg)}
-                                                className="px-3 py-1 rounded-full text-xs sm:text-sm font-semibold bg-indigo-600/10 text-indigo-700 border border-indigo-200 hover:bg-indigo-600/20 hover:border-indigo-300"
-                                                title="Open organization overview"
-                                            >
-                                                {switchedOrg.name}
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => openOrgOverview(switchedOrg)}
+                                                    className="px-3 py-1 rounded-full text-xs sm:text-sm font-semibold bg-indigo-600/10 text-indigo-700 border border-indigo-200 hover:bg-indigo-600/20 hover:border-indigo-300"
+                                                    title="Open organization overview"
+                                                >
+                                                    {switchedOrg.name}
+                                                </button>
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide border shadow-sm ring-1 ring-black/5 ${getRoleBadgeColor(switchedOrg.role)}`}>{displayRole(switchedOrg.role)}</span>
+                                            </div>
                                         )}
                                     </div>
                                     <p className="mt-2 text-sm text-slate-600">Here’s what’s happening in your workspace today.</p>

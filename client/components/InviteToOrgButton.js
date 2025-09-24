@@ -97,26 +97,28 @@ export default function InviteToOrgButton({ keycloak }) {
         <div className="relative">
             <button
                 onClick={() => setOpen(true)}
-                className="px-4 py-2 bg-purple-100/80 backdrop-blur-md text-purple-700 rounded-xl hover:bg-purple-200 hover:shadow-lg transition-all font-semibold shadow-xl flex items-center gap-2 group border border-purple-200/50 hover:border-purple-300 tracking-wide"
+                className="px-4 py-2 bg-purple-100/80 backdrop-blur-md text-purple-700 rounded-xl hover:bg-purple-200 hover:shadow-lg transition-all font-semibold shadow-xl flex items-center gap-2 group border border-purple-200/50 hover:border-purple-300 tracking-wide focus:outline-none focus:ring-0 focus-visible:outline-none"
             >
                 Invite to Org
             </button>
 
             {open && (
                 <div className="fixed inset-0 z-[10000] flex items-start justify-center p-4 pt-24">
-                    <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)}></div>
+                    {/* Keep navbar clean: don't dim the area occupied by the navbar (approx 64px) */}
+                    <div className="absolute left-0 right-0 bottom-0 top-16 bg-black/30" onClick={() => setOpen(false)}></div>
                     <div ref={modalRef} className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
-                                    <i className="fa-solid fa-user-plus"></i>
+                                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-extrabold">
+                                    {/* Use initial letter so it doesn't depend on icon fonts */}
+                                    I
                                 </div>
                                 <div>
                                     <div className="text-lg font-semibold text-gray-800">Invite to Organization</div>
                                     <div className="text-xs text-gray-500">Search and invite users to your organization</div>
                                 </div>
                             </div>
-                            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
+                            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-0 focus-visible:outline-none">
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
@@ -147,9 +149,14 @@ export default function InviteToOrgButton({ keycloak }) {
                                                 aria-selected={selectedUser?.id === u.id}
                                                 className={`w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center justify-between ${selectedUser?.id === u.id ? 'bg-purple-50 border-l-4 border-purple-400' : ''}`}
                                             >
-                                                <div>
-                                                    <div className="text-sm font-medium text-gray-800">{u.username}</div>
-                                                    <div className="text-xs text-gray-500">{u.email}</div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold flex items-center justify-center">
+                                                        {(u.username || u.email || '?').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-medium text-gray-800">{u.username}</div>
+                                                        <div className="text-xs text-gray-500">{u.email}</div>
+                                                    </div>
                                                 </div>
                                                 {selectedUser?.id === u.id && (
                                                     <i className="fa-solid fa-check text-purple-600"></i>
