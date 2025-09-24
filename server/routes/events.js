@@ -59,13 +59,19 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
     try {
         const { org_id, created_by } = req.query || {};
-        let sql = 'SELECT * FROM events';
+        let sql = `SELECT e.*, 
+                   u.username as organizer_username,
+                   u.first_name as organizer_first_name,
+                   u.last_name as organizer_last_name,
+                   u.email as organizer_email
+                   FROM events e
+                   LEFT JOIN users u ON e.created_by = u.id`;
         const params = [];
         const conds = [];
-        if (org_id) { params.push(org_id); conds.push(`org_id = $${params.length}`); }
-        if (created_by) { params.push(created_by); conds.push(`created_by = $${params.length}`); }
+        if (org_id) { params.push(org_id); conds.push(`e.org_id = $${params.length}`); }
+        if (created_by) { params.push(created_by); conds.push(`e.created_by = $${params.length}`); }
         if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
-        sql += ' ORDER BY event_date DESC';
+        sql += ' ORDER BY e.event_date DESC';
         const { rows } = await pool.query(sql, params);
         res.json(rows);
     } catch (err) {
@@ -75,7 +81,14 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
     try {
-        const { rows } = await pool.query('SELECT * FROM events WHERE id=$1', [req.params.id]);
+        const { rows } = await pool.query(`SELECT e.*, 
+                                           u.username as organizer_username,
+                                           u.first_name as organizer_first_name,
+                                           u.last_name as organizer_last_name,
+                                           u.email as organizer_email
+                                           FROM events e
+                                           LEFT JOIN users u ON e.created_by = u.id
+                                           WHERE e.id=$1`, [req.params.id]);
         if (!rows[0]) return res.status(404).json({ error: 'Not found' });
         res.json(rows[0]);
     } catch (err) {

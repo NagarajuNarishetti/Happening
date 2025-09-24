@@ -330,6 +330,11 @@ export default function MediaPage({ keycloak }) {
                                                     <span className="ml-3 shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" title={org?.name || ''}>{org?.name || ''}</span>
                                                 </div>
                                                 <div className="text-sm text-gray-600 mb-2 line-clamp-2">{ev.description || "No description"}</div>
+                                                <div className="text-xs text-gray-500 mb-2">
+                                                    <span className="font-medium">Organizer:</span> {ev.organizer_first_name && ev.organizer_last_name
+                                                        ? `${ev.organizer_first_name} ${ev.organizer_last_name}`
+                                                        : ev.organizer_username || 'Unknown'}
+                                                </div>
                                                 <div className="flex items-center justify-between text-sm text-gray-700">
                                                     <span>{ev.category || 'event'}</span>
                                                     <span>{ev.event_date ? new Date(ev.event_date).toLocaleString() : ''}</span>
@@ -431,6 +436,11 @@ export default function MediaPage({ keycloak }) {
                                                     <span className="ml-3 shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200" title={org?.name || ''}>{org?.name || ''}</span>
                                                 </div>
                                                 <div className="text-sm text-gray-600 mb-2 line-clamp-2">{g.event.event_description || 'No description'}</div>
+                                                <div className="text-xs text-gray-500 mb-2">
+                                                    <span className="font-medium">Organizer:</span> {ev?.organizer_first_name && ev?.organizer_last_name
+                                                        ? `${ev.organizer_first_name} ${ev.organizer_last_name}`
+                                                        : ev?.organizer_username || 'Unknown'}
+                                                </div>
                                                 <div className="flex items-center justify-between text-sm text-gray-700">
                                                     <span>{g.event.category || 'event'}</span>
                                                     <span>{g.event.event_date ? new Date(g.event.event_date).toLocaleString() : ''}</span>
@@ -506,6 +516,11 @@ export default function MediaPage({ keycloak }) {
                                                 <span className="text-xs text-gray-500">{org?.name || '—'}</span>
                                             </div>
                                             <div className="text-sm text-gray-600 mt-1 line-clamp-2">{ev.description || 'No description'}</div>
+                                            <div className="text-xs text-gray-500 mt-1 mb-2">
+                                                <span className="font-medium">Organizer:</span> {ev.organizer_first_name && ev.organizer_last_name
+                                                    ? `${ev.organizer_first_name} ${ev.organizer_last_name}`
+                                                    : ev.organizer_username || 'Unknown'}
+                                            </div>
                                             <div className="flex items-center justify-between text-xs text-gray-600 mt-2">
                                                 <span>{ev.category}</span>
                                                 <span>{ev.event_date ? new Date(ev.event_date).toLocaleString() : ''}</span>
