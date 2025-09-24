@@ -103,7 +103,18 @@ router.get('/:id/seats', async (req, res) => {
         if (!evRows[0]) return res.status(404).json({ error: 'Not found' });
         const total = Number(evRows[0].total_slots);
         const { rows } = await pool.query("SELECT seat_no FROM booking_seats WHERE event_id=$1 AND status='booked' ORDER BY seat_no", [req.params.id]);
-        res.json({ total, taken: rows.map(r => Number(r.seat_no)) });
+
+        // Also include currently held seats (temporary) from Redis
+        let held = [];
+        try {
+            const redis = getRedis();
+            const keys = await redis.keys(`event:${req.params.id}:hold:*`);
+            if (keys.length) {
+                held = keys.map(k => Number(k.split(':').slice(-1)[0])).filter(n => Number.isFinite(n));
+            }
+        } catch { }
+
+        res.json({ total, taken: rows.map(r => Number(r.seat_no)), held });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

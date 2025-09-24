@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { io } from "socket.io-client";
 import API from "../lib/api";
 import InvitationsButton from "../components/InvitationsButton";
 import { useRouter } from "next/router";
@@ -35,7 +36,10 @@ export default function MediaPage({ keycloak }) {
     // Seat selection for upcoming events
     const [showSeatSelect, setShowSeatSelect] = useState(false);
     const [seatSelect, setSeatSelect] = useState(null);
-    const [desiredSeats, setDesiredSeats] = useState(1);
+    const [seatError, setSeatError] = useState("");
+    const [desiredSeatsInput, setDesiredSeatsInput] = useState("1");
+    const socketRef = useRef(null);
+    const heartbeatRef = useRef(null);
     const router = useRouter();
     const switchOrgId = router?.query?.id || router?.query?.orgId || null;
     const isSwitchView = Boolean(switchOrgId);
@@ -195,6 +199,20 @@ export default function MediaPage({ keycloak }) {
         };
         init();
     }, [keycloak?.authenticated]);
+
+    // Heartbeat while seat modal is open
+    useEffect(() => {
+        if (showSeatSelect && seatSelect?.event?.id) {
+            // start heartbeat
+            heartbeatRef.current = setInterval(() => {
+                try { socketRef.current?.emit('event:holds:heartbeat', { eventId: seatSelect.event.id }); } catch { }
+            }, 8000);
+            return () => {
+                try { socketRef.current?.emit('event:holds:clear', { eventId: seatSelect.event.id }); } catch { }
+                if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+            };
+        }
+    }, [showSeatSelect, seatSelect?.event?.id]);
 
     // Direct booking button removed; booking is handled inside the seat selection modal
 
@@ -359,12 +377,45 @@ export default function MediaPage({ keycloak }) {
                                                     <button onClick={async () => {
                                                         try {
                                                             const res = await API.get(`/events/${ev.id}/seats`);
-                                                            const { total, taken } = res.data || { total: ev.total_slots, taken: [] };
+                                                            const { total, taken, held } = res.data || { total: ev.total_slots, taken: [], held: [] };
                                                             // Build seat grid metadata
-                                                            const seats = Array.from({ length: total }, (_, i) => ({ seat_no: i + 1, taken: taken?.includes(i + 1) }));
+                                                            const seats = Array.from({ length: total }, (_, i) => ({ seat_no: i + 1, taken: taken?.includes(i + 1), held: held?.includes(i + 1) }));
                                                             setSeatSelect({ event: ev, seats });
-                                                            setDesiredSeats(1);
+                                                            setDesiredSeatsInput("1");
+                                                            setSeatError("");
                                                             setShowSeatSelect(true);
+                                                            // init socket and join room
+                                                            if (!socketRef.current) {
+                                                                socketRef.current = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000');
+                                                            }
+                                                            socketRef.current.emit('event:join', { eventId: ev.id });
+                                                            socketRef.current.on('event:holds:update', ({ eventId, heldSeats }) => {
+                                                                if (String(eventId) !== String(ev.id)) return;
+                                                                setSeatSelect(prev => prev ? ({
+                                                                    ...prev,
+                                                                    seats: prev.seats.map(x => ({ ...x, held: Array.isArray(heldSeats) ? heldSeats.includes(x.seat_no) : x.held }))
+                                                                }) : prev);
+                                                            });
+                                                            // When someone books seats, immediately mark them as booked and deselect locally
+                                                            socketRef.current.on('event:bookings:update', ({ eventId, bookedSeats }) => {
+                                                                if (String(eventId) !== String(ev.id)) return;
+                                                                const setBooked = new Set((bookedSeats || []).map(Number));
+                                                                setSeatSelect(prev => prev ? ({
+                                                                    ...prev,
+                                                                    event: { ...prev.event, available_slots: Math.max(0, Number(prev.event.available_slots || 0) - setBooked.size) },
+                                                                    seats: prev.seats.map(x => setBooked.has(x.seat_no) ? ({ ...x, taken: true, selected: false }) : x)
+                                                                }) : prev);
+                                                            });
+                                                            // When seats are freed due to cancellations, turn them green immediately
+                                                            socketRef.current.on('event:seats:freed', ({ eventId, freedSeats }) => {
+                                                                if (String(eventId) !== String(ev.id)) return;
+                                                                const setFreed = new Set((freedSeats || []).map(Number));
+                                                                setSeatSelect(prev => prev ? ({
+                                                                    ...prev,
+                                                                    event: { ...prev.event, available_slots: Number(prev.event.available_slots || 0) + setFreed.size },
+                                                                    seats: prev.seats.map(x => setFreed.has(x.seat_no) ? ({ ...x, taken: false, held: false, selected: false }) : x)
+                                                                }) : prev);
+                                                            });
                                                         } catch (e) {
                                                             setMessage('❌ Failed to load seats: ' + (e.response?.data?.error || e.message));
                                                         }
@@ -818,17 +869,42 @@ export default function MediaPage({ keycloak }) {
                             <h3 className="text-xl font-semibold text-gray-800">Select Seats - {seatSelect.event.name}</h3>
                             <button onClick={() => setShowSeatSelect(false)} className="text-gray-500 hover:text-gray-700">✕</button>
                         </div>
-                        <div className="text-sm text-gray-600 mb-3">Green = available, Red = booked. You can request more seats than available to join the waiting list automatically.</div>
+                        {Number(seatSelect.event.available_slots || 0) > 0 ? (
+                            <div className="text-sm text-gray-600 mb-3">Green = available, Dark green = your selection, Gray = selected by others (temporary), Red = booked. FCFS applies when booking.</div>
+                        ) : (
+                            <div className="mb-3 text-sm font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                Sorry, currently all tickets are booked. If you want to stay on the waiting list, please choose the number of tickets you need. Note: if fewer seats become available than your request, we will allocate only that many to you.
+                            </div>
+                        )}
+                        {seatError && (
+                            <div className="mb-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{seatError}</div>
+                        )}
                         <div className="mb-4 flex items-center gap-3">
                             <label className="text-sm text-gray-700">How many seats?</label>
-                            <input type="number" min={1} value={desiredSeats} onChange={e => setDesiredSeats(Math.max(1, Number(e.target.value) || 1))} className="w-24 border rounded-lg px-3 py-2 text-sm" />
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={desiredSeatsInput}
+                                onChange={e => {
+                                    const onlyDigits = String(e.target.value || '').replace(/[^0-9]/g, '');
+                                    setDesiredSeatsInput(onlyDigits);
+                                    if (seatError) setSeatError("");
+                                }}
+                                onWheel={(e) => { try { e.currentTarget.blur(); } catch (_) { } }}
+                                onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); } }}
+                                className="w-24 border rounded-lg px-3 py-2 text-sm"
+                            />
                             <div className="text-xs text-gray-600">Available now: {Number(seatSelect.event.available_slots) ?? 0}</div>
                         </div>
                         <div className="grid grid-cols-5 gap-2 max-h-[420px] overflow-auto p-2 border rounded-lg">
                             {seatSelect.seats.map(s => (
                                 <button key={s.seat_no} disabled={s.taken} onClick={() => {
                                     setSeatSelect(prev => ({ ...prev, seats: prev.seats.map(x => x.seat_no === s.seat_no ? { ...x, selected: !x.selected } : x) }));
-                                }} className={`px-2 py-2 text-xs rounded ${s.taken ? 'bg-red-200 text-red-800 cursor-not-allowed' : (s.selected ? 'bg-emerald-500 text-white' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200')}`}>
+                                    // emit updated holds for my selection
+                                    const selected = seatSelect.seats.map(x => (x.seat_no === s.seat_no ? !x.selected : x.selected) ? x.seat_no : null).filter(Boolean);
+                                    try { socketRef.current?.emit('event:holds:set', { eventId: seatSelect.event.id, seats: selected }); } catch { }
+                                }} className={`px-2 py-2 text-xs rounded ${s.taken ? 'bg-red-200 text-red-800 cursor-not-allowed' : (s.selected ? 'bg-emerald-600 text-white' : (s.held ? 'bg-gray-200 text-gray-700' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'))}`}>
                                     {s.seat_no}
                                 </button>
                             ))}
@@ -836,10 +912,15 @@ export default function MediaPage({ keycloak }) {
                         <div className="mt-5 flex items-center justify-between gap-3">
                             <div className="text-xs text-gray-600">Selected: {seatSelect.seats.filter(s => s.selected).length}</div>
                             <div className="flex gap-2">
-                                <button onClick={() => setShowSeatSelect(false)} className="px-4 py-2 rounded-xl border text-sm">Close</button>
+                                <button onClick={() => { setSeatError(""); setShowSeatSelect(false); }} className="px-4 py-2 rounded-xl border text-sm">Close</button>
                                 <button onClick={async () => {
                                     const selected = seatSelect.seats.filter(s => s.selected).map(s => s.seat_no);
-                                    const seatsToBook = Math.max(1, selected.length, Number(desiredSeats) || 1);
+                                    const seatsToBook = Math.max(1, selected.length, Number(desiredSeatsInput) || 1);
+                                    const remaining = Number(seatSelect.event.available_slots || 0);
+                                    if (remaining > 0 && seatsToBook > remaining) {
+                                        setSeatError(`Sorry, we only have ${remaining} ticket${remaining === 1 ? '' : 's'} left.`);
+                                        return;
+                                    }
                                     try {
                                         setBookingLoading(true);
                                         const resp = await API.post('/bookings', { event_id: seatSelect.event.id, user_id: currentUserId, seats: seatsToBook, seat_numbers: selected });
@@ -849,9 +930,28 @@ export default function MediaPage({ keycloak }) {
                                             setMessage('✅ Booking submitted');
                                         }
                                         setShowSeatSelect(false);
+                                        try { socketRef.current?.emit('event:holds:clear', { eventId: seatSelect.event.id }); } catch { }
                                         await Promise.all([fetchEvents(), fetchMyBookings(currentUserId)]);
                                     } catch (e) {
-                                        setMessage('❌ Failed to book: ' + (e.response?.data?.error || e.message));
+                                        if (e.response?.status === 409 && e.response?.data?.error === 'seats_conflict') {
+                                            const unavailable = e.response.data.unavailable || [];
+                                            setMessage(`❌ Some seats were already booked: ${unavailable.join(', ')}`);
+                                            try {
+                                                const res = await API.get(`/events/${seatSelect.event.id}/seats`);
+                                                const { total, taken, held } = res.data || { total: seatSelect.event.total_slots, taken: [], held: [] };
+                                                setSeatSelect(prev => prev ? ({
+                                                    ...prev,
+                                                    seats: Array.from({ length: total }, (_, i) => ({
+                                                        seat_no: i + 1,
+                                                        taken: taken?.includes(i + 1),
+                                                        held: held?.includes(i + 1),
+                                                        selected: false
+                                                    }))
+                                                }) : prev);
+                                            } catch { }
+                                        } else {
+                                            setMessage('❌ Failed to book: ' + (e.response?.data?.error || e.message));
+                                        }
                                     } finally {
                                         setBookingLoading(false);
                                     }
