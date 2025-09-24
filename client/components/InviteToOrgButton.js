@@ -168,7 +168,7 @@ export default function InviteToOrgButton({ keycloak }) {
                                         className={`p-4 rounded-xl border text-left ${role !== "Organizer" ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}
                                     >
                                         <div className="font-semibold">User</div>
-                                        <div className="text-xs text-gray-500">Can raise tickets</div>
+                                        <div className="text-xs text-gray-500">Can Book Tickets</div>
                                     </button>
                                     <button
                                         onClick={() => setRole("Organizer")}
