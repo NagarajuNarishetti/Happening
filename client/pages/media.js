@@ -1258,6 +1258,7 @@ export default function MediaPage({ keycloak }) {
                             {congratsData.status === 'confirmed' ? (
                                 <div>
                                     <p className="text-gray-600 mb-3">You have successfully booked your tickets!</p>
+                                    <p className="text-indigo-600 font-semibold mb-3">Thank you for choosing us!</p>
                                     <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
                                         <p className="text-green-800 font-semibold mb-1">Your Seats:</p>
                                         <p className="text-green-700 text-lg">
@@ -1271,6 +1272,7 @@ export default function MediaPage({ keycloak }) {
                             ) : (
                                 <div>
                                     <p className="text-gray-600 mb-3">The event is currently full, but you've been added to the waiting list!</p>
+                                    <p className="text-indigo-600 font-semibold mb-3">Thank you for your interest!</p>
                                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
                                         <p className="text-yellow-800 font-semibold mb-1">Waiting List Position:</p>
                                         <p className="text-yellow-700 text-lg">
@@ -1320,6 +1322,7 @@ export default function MediaPage({ keycloak }) {
                             {/* Message */}
                             <div>
                                 <p className="text-gray-600 mb-3">You have successfully cancelled your seat(s).</p>
+                                <p className="text-indigo-600 font-semibold mb-3">Thank you for your understanding!</p>
                                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
                                     <p className="text-green-800 font-semibold mb-1">Cancelled Seats:</p>
                                     <p className="text-green-700 text-lg">
