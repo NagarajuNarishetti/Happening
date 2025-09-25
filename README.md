@@ -36,6 +36,10 @@ Each image is included below with a short explanation of what it demonstrates.
 ![Customized Login](ABOUT_PROJECT/Images/cutomizedLoginPageWithSocialLoginsUsingKeyClock.png)
 Description: Users authenticate via Keycloak; Google/GitHub SSO supported. Upon first login, an organization can be created for the user.
 
+Additional Keycloak client configuration references:
+![Keycloak Client - Frontend](ABOUT_PROJECT/Images/happening-client.png)
+![Keycloak Client - Backend](ABOUT_PROJECT/Images/happening-server.png)
+
 2) First page after login (home/dashboard)
 ![First Page After Login](ABOUT_PROJECT/Images/FirstPageAfterLogin.png)
 Description: Landing experience showing upcoming events, organization context, and quick actions.
