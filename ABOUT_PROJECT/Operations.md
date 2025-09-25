@@ -1,10 +1,14 @@
 # Operations
 
 ## Starting services
-- DB/Redis/RabbitMQ/Keycloak: `docker compose up -d` from `docker/`
-- API: `cd server && npm run dev`
-- Worker: `cd server && npm run worker:notifications`
-- Frontend: `cd client && npm run dev`
+- Infra (DB/Redis/RabbitMQ/Keycloak):
+  - `cd docker && docker compose up -d`
+- API:
+  - `cd ../server && npm install && npm run dev`
+- Worker:
+  - `cd ../server && npm install && npm run worker:notifications`
+- Frontend:
+  - `cd ../client && npm install && npm run dev`
 
 ## Common checks
 - API health: `GET /` on server (shows Running)

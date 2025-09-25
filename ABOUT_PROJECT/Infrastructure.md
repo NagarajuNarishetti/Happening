@@ -9,9 +9,14 @@
 See `docker/docker-compose.yml` for service definitions and environment variables.
 
 ## Running locally
-- Backend API: `cd server && npm run dev` (or `npm start`)
-- Notifications worker: `cd server && npm run worker:notifications`
-- Frontend: `cd client && npm run dev`
+- Start infra:
+  - `cd docker && docker compose up -d`
+- Backend API:
+  - `cd ../server && npm install && npm run dev`
+- Notifications worker:
+  - `cd ../server && npm install && npm run worker:notifications`
+- Frontend:
+  - `cd ../client && npm install && npm run dev`
 
 ## RabbitMQ UI
 - Visit `http://localhost:15672` (user: `happening`, pass: `happening`).
