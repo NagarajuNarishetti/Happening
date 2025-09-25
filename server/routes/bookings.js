@@ -154,7 +154,7 @@ router.post('/', async (req, res) => {
         if (status === 'confirmed' && seatNos.length > 0) {
             response.assigned_seats = seatNos;
         }
-        
+
         res.status(201).json(response);
     } catch (err) {
         await client.query('ROLLBACK');
@@ -230,11 +230,26 @@ router.post('/:id/cancel', async (req, res) => {
                 const requestedSeats = Math.max(1, Number(waiting.seats) || 1);
                 const toAllocate = Math.min(seatsRemainingToAllocate, requestedSeats);
 
-                const { rows: promotedRows } = await client.query(
-                    `UPDATE bookings SET status='confirmed', waiting_number=NULL, seats=$2, updated_at=NOW() WHERE id=$1 RETURNING id`,
-                    [waiting.id, toAllocate]
-                );
-                if (!promotedRows[0]) continue;
+                let confirmedBookingId = null;
+                if (toAllocate === requestedSeats) {
+                    const { rows: promotedRows } = await client.query(
+                        `UPDATE bookings SET status='confirmed', waiting_number=NULL, updated_at=NOW() WHERE id=$1 RETURNING id`,
+                        [waiting.id]
+                    );
+                    if (!promotedRows[0]) continue;
+                    confirmedBookingId = promotedRows[0].id;
+                } else {
+                    // Split: keep waiting with remaining, insert confirmed booking for allocated seats
+                    const remaining = requestedSeats - toAllocate;
+                    await client.query(`UPDATE bookings SET seats=$2, updated_at=NOW() WHERE id=$1`, [waiting.id, remaining]);
+                    const { rows: newRows } = await client.query(
+                        `INSERT INTO bookings(event_id, user_id, seats, status, waiting_number) VALUES($1,$2,$3,'confirmed',NULL) RETURNING id`,
+                        [booking.event_id, nextUserId, toAllocate]
+                    );
+                    confirmedBookingId = newRows[0].id;
+                    // Requeue user to the front since they still have pending seats
+                    await redis.lpush(`event:${booking.event_id}:waitlist`, nextUserId);
+                }
 
                 // allocate seat numbers
                 const takenRes = await client.query("SELECT seat_no FROM booking_seats WHERE event_id=$1 AND status='booked' ORDER BY seat_no", [booking.event_id]);
@@ -243,7 +258,7 @@ router.post('/:id/cancel', async (req, res) => {
                 let allocated = 0;
                 while (allocated < toAllocate) {
                     while (taken.has(seatNum)) seatNum++;
-                    await client.query("INSERT INTO booking_seats(event_id, booking_id, user_id, seat_no, status) VALUES($1,$2,$3,$4,'booked')", [booking.event_id, waiting.id, nextUserId, seatNum]);
+                    await client.query("INSERT INTO booking_seats(event_id, booking_id, user_id, seat_no, status) VALUES($1,$2,$3,$4,'booked')", [booking.event_id, confirmedBookingId, nextUserId, seatNum]);
                     taken.add(seatNum);
                     promotedSeatNos.push(seatNum);
                     seatNum++;
@@ -280,6 +295,49 @@ router.post('/:id/cancel', async (req, res) => {
         res.status(500).json({ error: err.message });
     } finally {
         client.release();
+    }
+});
+
+// Live waiting position for a booking
+router.get('/:id/waiting-position', async (req, res) => {
+    try {
+        const bookingId = req.params.id;
+        const { rows } = await pool.query('SELECT id, event_id, user_id, status, waiting_number, seats FROM bookings WHERE id=$1', [bookingId]);
+        const booking = rows[0];
+        if (!booking) return res.status(404).json({ error: 'Not found' });
+        if (booking.status !== 'waiting') {
+            // still include aggregates
+            const { rows: aggRows } = await pool.query(
+                `SELECT status, seats FROM bookings WHERE event_id=$1 AND user_id=$2`,
+                [booking.event_id, booking.user_id]
+            );
+            const confirmedSeats = aggRows.filter(r => r.status === 'confirmed').reduce((s, r) => s + Number(r.seats || 0), 0);
+            const pendingSeats = aggRows.filter(r => r.status === 'waiting').reduce((s, r) => s + Number(r.seats || 0), 0);
+            return res.json({ status: booking.status, position: null, confirmedSeats, pendingSeats, requestedSeats: Number(booking.seats || 0) });
+        }
+        const redis = getRedis();
+        const listKey = `event:${booking.event_id}:waitlist`;
+        let position = null;
+        try {
+            const list = await redis.lrange(listKey, 0, -1);
+            const idx = list.findIndex(x => String(x) === String(booking.user_id));
+            position = idx >= 0 ? idx + 1 : null;
+        } catch (_) {
+            position = null;
+        }
+        if (position == null) {
+            // fallback to DB waiting_number if available
+            position = booking.waiting_number || null;
+        }
+        const { rows: aggRows } = await pool.query(
+            `SELECT status, seats FROM bookings WHERE event_id=$1 AND user_id=$2`,
+            [booking.event_id, booking.user_id]
+        );
+        const confirmedSeats = aggRows.filter(r => r.status === 'confirmed').reduce((s, r) => s + Number(r.seats || 0), 0);
+        const pendingSeats = aggRows.filter(r => r.status === 'waiting').reduce((s, r) => s + Number(r.seats || 0), 0);
+        return res.json({ status: 'waiting', position, confirmedSeats, pendingSeats, requestedSeats: Number(booking.seats || 0) });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
     }
 });
 
@@ -354,17 +412,30 @@ router.post('/:id/cancel-seats', async (req, res) => {
             if (!waiting) continue;
             const requestedSeats = Math.max(1, Number(waiting.seats) || 1);
             const toAllocate = Math.min(seatsRemainingToAllocate, requestedSeats);
-            const { rows: promotedRows } = await client.query(
-                `UPDATE bookings SET status='confirmed', waiting_number=NULL, seats=$2, updated_at=NOW() WHERE id=$1 RETURNING id`,
-                [waiting.id, toAllocate]
-            );
-            if (!promotedRows[0]) continue;
+            let confirmedBookingId = null;
+            if (toAllocate === requestedSeats) {
+                const { rows: promotedRows } = await client.query(
+                    `UPDATE bookings SET status='confirmed', waiting_number=NULL, updated_at=NOW() WHERE id=$1 RETURNING id`,
+                    [waiting.id]
+                );
+                if (!promotedRows[0]) continue;
+                confirmedBookingId = promotedRows[0].id;
+            } else {
+                const remaining = requestedSeats - toAllocate;
+                await client.query(`UPDATE bookings SET seats=$2, updated_at=NOW() WHERE id=$1`, [waiting.id, remaining]);
+                const { rows: newRows } = await client.query(
+                    `INSERT INTO bookings(event_id, user_id, seats, status, waiting_number) VALUES($1,$2,$3,'confirmed',NULL) RETURNING id`,
+                    [booking.event_id, nextUserId, toAllocate]
+                );
+                confirmedBookingId = newRows[0].id;
+                await redis.lpush(`event:${booking.event_id}:waitlist`, nextUserId);
+            }
             const takenRes = await client.query("SELECT seat_no FROM booking_seats WHERE event_id=$1 AND status='booked' ORDER BY seat_no", [booking.event_id]);
             const taken = new Set(takenRes.rows.map(r => Number(r.seat_no)));
             let seat = 1, allocated = 0;
             while (allocated < toAllocate) {
                 while (taken.has(seat)) seat++;
-                await client.query("INSERT INTO booking_seats(event_id, booking_id, user_id, seat_no, status) VALUES($1,$2,$3,$4,'booked')", [booking.event_id, waiting.id, nextUserId, seat]);
+                await client.query("INSERT INTO booking_seats(event_id, booking_id, user_id, seat_no, status) VALUES($1,$2,$3,$4,'booked')", [booking.event_id, confirmedBookingId, nextUserId, seat]);
                 taken.add(seat);
                 seat++;
                 allocated++;
