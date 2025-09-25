@@ -149,7 +149,13 @@ router.post('/', async (req, res) => {
             } catch { }
         }
 
-        res.status(201).json(rows[0]);
+        // Include assigned seat numbers in response for confirmed bookings
+        const response = { ...rows[0] };
+        if (status === 'confirmed' && seatNos.length > 0) {
+            response.assigned_seats = seatNos;
+        }
+        
+        res.status(201).json(response);
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
