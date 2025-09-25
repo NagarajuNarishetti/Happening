@@ -24,6 +24,9 @@ export default function MediaPage({ keycloak }) {
     // Congratulations popup state
     const [showCongrats, setShowCongrats] = useState(false);
     const [congratsData, setCongratsData] = useState(null);
+    // Cancellation congratulations popup state
+    const [showCancelCongrats, setShowCancelCongrats] = useState(false);
+    const [cancelCongratsData, setCancelCongratsData] = useState(null);
     // Create-event form state
     const [creating, setCreating] = useState(false);
     const [newEvent, setNewEvent] = useState({ org_id: "", name: "", description: "", category: "webinar", event_date: "", total_slots: 50 });
@@ -150,6 +153,23 @@ export default function MediaPage({ keycloak }) {
     }, [isSwitchView, isSwitchOrganizer, switchOrgId]);
 
     const showUpcomingSection = !isSwitchView || !isSwitchOrganizer;
+
+    // Helper function to get organization name from filter
+    const getOrgNameFromFilter = (orgFilter) => {
+        if (orgFilter === 'all') return 'all organizations';
+        const org = organizations.find(o => String(o.id) === String(orgFilter));
+        return org?.name || 'selected organization';
+    };
+
+    // Helper function to format filter display text
+    const getFilterDisplayText = () => {
+        const statusText = upcomingStatus === 'all' ? 'all events' :
+            upcomingStatus === 'upcoming' ? 'upcoming events' : 'completed events';
+        const orgText = getOrgNameFromFilter(upcomingOrgFilter);
+        const sortText = upcomingSort === 'dateAsc' ? 'date (ascending)' : 'date (descending)';
+
+        return `${statusText} from ${orgText} sorted by ${sortText}`;
+    };
     const showYourEventsSection = !isSwitchView || !isSwitchOrganizer;
 
     const getCurrentUser = async () => {
@@ -417,6 +437,12 @@ export default function MediaPage({ keycloak }) {
                                     <i className="fa-solid fa-folder-open" style={{ color: "#96C2DB", fontSize: "45px" }}></i>
                                 </div>
                                 <h3 className="text-xl font-bold text-gray-800 mb-4 tracking-wide">NO EVENTS FOUND</h3>
+                                <p className="text-gray-600 mb-2 max-w-md mx-auto leading-relaxed">
+                                    Currently no events for <span className="font-semibold text-gray-700">{getOrgNameFromFilter(upcomingOrgFilter)}</span> with your selected filters.
+                                </p>
+                                <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+                                    Filters: {getFilterDisplayText()}
+                                </p>
                                 <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">Check back later for upcoming events.</p>
                                 <button onClick={fetchEvents} className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 backdrop-blur-md text-white rounded-2xl hover:from-blue-400 hover:to-blue-500 transition-all font-bold shadow-2xl hover:shadow-3xl group border border-blue-400 tracking-wide">Refresh</button>
                             </div>
@@ -635,7 +661,17 @@ export default function MediaPage({ keycloak }) {
                                                             if (!ok) return;
                                                             // cancel each booking fully
                                                             await Promise.all(g.bookings.map(bk => API.post(`/bookings/${bk.booking_id}/cancel`)));
-                                                            setMessage('✅ Booking(s) cancelled');
+
+                                                            // Show cancellation congratulations popup for full booking cancellation
+                                                            const totalSeats = g.bookings.reduce((sum, bk) => sum + (bk.seats || 0), 0);
+                                                            setCancelCongratsData({
+                                                                cancelled_seats: [], // No specific seats for full booking cancellation
+                                                                seat_count: totalSeats,
+                                                                remaining_seats: 0, // All seats cancelled
+                                                                event_name: g.event.event_name
+                                                            });
+                                                            setShowCancelCongrats(true);
+
                                                             await Promise.all([fetchEvents(), fetchMyBookings(currentUserId)]);
                                                         } catch (e) {
                                                             setMessage('❌ Failed to cancel: ' + (e.response?.data?.error || e.message));
@@ -666,7 +702,10 @@ export default function MediaPage({ keycloak }) {
 
                         {events.filter(ev => organizerOrgIds.has(ev.org_id) && String(ev.created_by) === String(currentUserId)).filter(ev => !isSwitchView || String(ev.org_id) === String(switchOrgId)).length === 0 ? (
                             <div className="text-center py-10 bg-white/80 backdrop-blur-3xl rounded-2xl border border-blue-200/50 shadow">
-                                <p className="text-gray-600">No events created yet. Use the Create Event button to add one.</p>
+                                <p className="text-gray-600">
+                                    No events created yet for <span className="font-semibold text-gray-700">{getOrgNameFromFilter(isSwitchView ? String(switchOrgId) : yourOrgFilter)}</span>.
+                                    Use the Create Event button to add one.
+                                </p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -965,7 +1004,19 @@ export default function MediaPage({ keycloak }) {
                                         const toCancel = selected.map(s => s.seat_no);
                                         await API.post(`/bookings/${manageBooking.booking_id}/cancel-seats`, { seat_numbers: toCancel });
                                     }
-                                    setMessage('✅ Selected seats cancelled');
+
+                                    // Show cancellation congratulations popup instead of simple message
+                                    const cancelledSeats = selected.map(s => s.seat_no);
+                                    const remainingSeats = manageSeats.filter(s => s.status === 'booked' && !s._selected).length;
+
+                                    setCancelCongratsData({
+                                        cancelled_seats: cancelledSeats,
+                                        seat_count: selected.length,
+                                        remaining_seats: remainingSeats,
+                                        event_name: manageBooking.event_name
+                                    });
+                                    setShowCancelCongrats(true);
+
                                     setShowManageSeatsModal(false);
                                     await Promise.all([fetchEvents(), fetchMyBookings(currentUserId)]);
                                 } catch (e) {
@@ -1130,7 +1181,7 @@ export default function MediaPage({ keycloak }) {
                                             try {
                                                 setBookingLoading(true);
                                                 const resp = await API.post('/bookings', { event_id: seatSelect.event.id, user_id: currentUserId, seats: seatsToBook, seat_numbers: selected });
-                                                
+
                                                 // Show congratulations popup instead of simple message
                                                 setCongratsData({
                                                     status: resp?.data?.status || 'confirmed',
@@ -1140,7 +1191,7 @@ export default function MediaPage({ keycloak }) {
                                                     event_name: seatSelect.event.name
                                                 });
                                                 setShowCongrats(true);
-                                                
+
                                                 setShowSeatSelect(false);
                                                 try { socketRef.current?.emit('event:holds:clear', { eventId: seatSelect.event.id }); } catch { }
                                                 await Promise.all([fetchEvents(), fetchMyBookings(currentUserId)]);
@@ -1199,10 +1250,10 @@ export default function MediaPage({ keycloak }) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
-                            
+
                             {/* Title */}
                             <h3 className="text-2xl font-bold text-gray-800 mb-2">Congratulations!</h3>
-                            
+
                             {/* Message based on booking status */}
                             {congratsData.status === 'confirmed' ? (
                                 <div>
@@ -1210,7 +1261,7 @@ export default function MediaPage({ keycloak }) {
                                     <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
                                         <p className="text-green-800 font-semibold mb-1">Your Seats:</p>
                                         <p className="text-green-700 text-lg">
-                                            {congratsData.assigned_seats && congratsData.assigned_seats.length > 0 
+                                            {congratsData.assigned_seats && congratsData.assigned_seats.length > 0
                                                 ? `Seat${congratsData.assigned_seats.length > 1 ? 's' : ''} ${congratsData.assigned_seats.join(', ')}`
                                                 : `Seat${congratsData.seats > 1 ? 's' : ''} assigned`
                                             }
@@ -1231,16 +1282,72 @@ export default function MediaPage({ keycloak }) {
                                     </div>
                                 </div>
                             )}
-                            
+
                             {/* Event Info */}
                             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-left">
                                 <p className="text-sm text-gray-600 mb-1">Event:</p>
                                 <p className="font-semibold text-gray-800">{congratsData.event_name}</p>
                             </div>
-                            
+
                             {/* Close Button */}
                             <button
                                 onClick={() => setShowCongrats(false)}
+                                className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors"
+                            >
+                                Got it!
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Cancellation Congratulations Popup */}
+            {showCancelCongrats && cancelCongratsData && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setShowCancelCongrats(false)}></div>
+                    <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md mx-4 p-6">
+                        <div className="text-center">
+                            {/* Success Icon */}
+                            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+
+                            {/* Title */}
+                            <h3 className="text-2xl font-bold text-gray-800 mb-2">Cancellation Successful!</h3>
+
+                            {/* Message */}
+                            <div>
+                                <p className="text-gray-600 mb-3">You have successfully cancelled your seat(s).</p>
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                    <p className="text-green-800 font-semibold mb-1">Cancelled Seats:</p>
+                                    <p className="text-green-700 text-lg">
+                                        {cancelCongratsData.cancelled_seats && cancelCongratsData.cancelled_seats.length > 0
+                                            ? `Seat${cancelCongratsData.cancelled_seats.length > 1 ? 's' : ''} ${cancelCongratsData.cancelled_seats.join(', ')}`
+                                            : `${cancelCongratsData.seat_count} seat${cancelCongratsData.seat_count > 1 ? 's' : ''} cancelled`
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Event Info */}
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-left">
+                                <p className="text-sm text-gray-600 mb-1">Event:</p>
+                                <p className="font-semibold text-gray-800">{cancelCongratsData.event_name}</p>
+                            </div>
+
+                            {/* Remaining Seats Info */}
+                            {cancelCongratsData.remaining_seats > 0 && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-left">
+                                    <p className="text-sm text-blue-600 mb-1">Remaining Seats:</p>
+                                    <p className="font-semibold text-blue-800">{cancelCongratsData.remaining_seats} seat{cancelCongratsData.remaining_seats > 1 ? 's' : ''} still confirmed</p>
+                                </div>
+                            )}
+
+                            {/* Close Button */}
+                            <button
+                                onClick={() => setShowCancelCongrats(false)}
                                 className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors"
                             >
                                 Got it!
