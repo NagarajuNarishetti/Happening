@@ -1,3 +1,5 @@
+![Happening Logo](client/public/brand-logo.svg)
+
 ## Happening — Multi‑Tenant Real‑Time Event Booking Platform
 
 This repository contains Happening, a multi‑tenant event booking platform (similar to BookMyShow/Eventbrite) featuring real‑time seat selection, coordinated waitlist promotion, notifications, and enterprise‑grade authentication.
@@ -31,66 +33,70 @@ This repository contains Happening, a multi‑tenant event booking platform (sim
 Each image is included below with a short explanation of what it demonstrates.
 
 1) Customized login page (Keycloak) with social logins
-![Customized Login](./Images/cutomizedLoginPageWithSocialLoginsUsingKeyClock.png)
+![Customized Login](ABOUT_PROJECT/Images/cutomizedLoginPageWithSocialLoginsUsingKeyClock.png)
 Description: Users authenticate via Keycloak; Google/GitHub SSO supported. Upon first login, an organization can be created for the user.
 
 2) First page after login (home/dashboard)
-![First Page After Login](./Images/FirstPageAfterLogin.png)
+![First Page After Login](ABOUT_PROJECT/Images/FirstPageAfterLogin.png)
 Description: Landing experience showing upcoming events, organization context, and quick actions.
 
 3) Home pages (marketing/summary sections)
-![Home Page 1](./Images/homePage1.png)
+![Home Page 1](ABOUT_PROJECT/Images/homePage1.png)
 Description: Marketing/overview page with platform value proposition.
 
-![Home Page 2](./Images/homePage2.png)
+![Home Page 2](ABOUT_PROJECT/Images/homePage2.png)
 Description: Additional highlights about features and user journeys.
 
 4) Create event section (Organizer workflow)
-![Create Event](./Images/CreateEventSection.png)
+![Create Event](ABOUT_PROJECT/Images/CreateEventSection.png)
 Description: Organizers can define name, description, category, date/time, and total slots.
 
 5) Organizer dashboard
-![Organizer Dashboard](./Images/organizerDashBord.png)
+![Organizer Dashboard](ABOUT_PROJECT/Images/organizerDashBord.png)
 Description: View and manage events, see statuses, and open seat management modals.
 
 6) Organization switching
-![Switch Organizations](./Images/optoinToSwitchOrgs.png)
+![Switch Organizations](ABOUT_PROJECT/Images/optoinToSwitchOrgs.png)
 Description: Users belonging to multiple orgs can switch context; role‑based access applies per org.
 
+6a) Invite users to organization and assign roles
+![Invite Users To Org](ABOUT_PROJECT/Images/InviteUsersAsOrganizersAndUsersInOurOrganization.png)
+Description: Search users by username/email and assign role as `User` (book tickets) or `Organizer` (create & manage events); sends invite.
+
 7) Manage seats (Organizer)
-![Manage Seats](./Images/CanManageSeats.png)
+![Manage Seats](ABOUT_PROJECT/Images/CanManageSeats.png)
 Description: Organizer tools for seat map configuration and maintenance.
 
 8) Book desired seats by selecting seat number (User)
-![Seat Selection](./Images/BookDesiredSeatsBySelectingSeatNumber.png)
+![Seat Selection](ABOUT_PROJECT/Images/BookDesiredSeatsBySelectingSeatNumber.png)
 Description: Real‑time seat map allows selecting exact seats. Reservation logic is coordinated via Redis and confirmed in PostgreSQL.
 
 9) When a user selects seats, others see status instantly
-![Live Seat Status On Select](./Images/whenAnUserSelectsSeatsToBookItShowsStatusToOtherUsers.png)
+![Live Seat Status On Select](ABOUT_PROJECT/Images/whenAnUserSelectsSeatsToBookItShowsStatusToOtherUsers.png)
 Description: WebSocket updates broadcast seat holds/selections to all connected users to avoid collision.
 
 10) When a user books, seats are frozen instantly for others (Socket.IO)
-![Seats Freeze On Book](./Images/WhenAnUserBooksTicketsThatSetsWillGetFreezedForOtherUsersInstantlyUsingSocketIo.png)
+![Seats Freeze On Book](ABOUT_PROJECT/Images/WhenAnUserBooksTicketsThatSetsWillGetFreezedForOtherUsersInstantlyUsingSocketIo.png)
 Description: Confirmed seats become unavailable across clients in real‑time.
 
 11) Waitlist confirmation
-![Waitlist Confirmation](./Images/WatingConformation.png)
+![Waitlist Confirmation](ABOUT_PROJECT/Images/WatingConformation.png)
 Description: If the event is full, the booking is placed in a waitlist with a `waiting_number` for FCFS promotion.
 
 12) Waitlist visualization
-![Waitlist View](./Images/Wating01.png)
+![Waitlist View](ABOUT_PROJECT/Images/Wating01.png)
 Description: Users can see their waitlist status and current position.
 
 13) Track waiting status
-![Track Waiting Status](./Images/canTrackWatingStatus.png)
+![Track Waiting Status](ABOUT_PROJECT/Images/canTrackWatingStatus.png)
 Description: Users can monitor status changes; notifications are emitted on promotion.
 
 14) When other users cancel, your waitlisted booking is promoted automatically
-![Promotion On Cancel](./Images/WhenOtherUsersCancelTheirTicketsYouWillGetThoseSeatsAsPerYourWatingPosition.png)
+![Promotion On Cancel](ABOUT_PROJECT/Images/WhenOtherUsersCancelTheirTicketsYouWillGetThoseSeatsAsPerYourWatingPosition.png)
 Description: Cancellation triggers Redis slot increment and FCFS promotion from the waitlist, with notifications.
 
 15) Cancellation success modal
-![Cancellation Success](./Images/CancelationSucessFullPopUpAfterCancelation.png)
+![Cancellation Success](ABOUT_PROJECT/Images/CancelationSucessFullPopUpAfterCancelation.png)
 Description: Post‑cancel feedback to confirm the action and next steps.
 
 ### Learn More
