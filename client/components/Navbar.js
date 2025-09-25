@@ -16,6 +16,7 @@ export default function Navbar({ keycloak }) {
   const orgsHoverTimer = useRef(null);
 
   const links = [];
+  const isHome = router.pathname === '/';
 
   const loadPendingInvites = async () => {
     if (!keycloak?.authenticated || !keycloak?.tokenParsed?.sub) {
@@ -156,7 +157,13 @@ export default function Navbar({ keycloak }) {
           {/* Logo */}
           <div
             className="flex-shrink-0 cursor-pointer select-none group"
-            onClick={() => router.push('/media')}
+            onClick={() => {
+              if (keycloak?.authenticated) {
+                router.push('/media');
+              } else {
+                router.push('/');
+              }
+            }}
           >
             <div className="flex items-center gap-2">
               <img src="/brand-logo.svg" alt="Happening" className="w-7 h-7 rounded-[10px] shadow-sm" />
@@ -166,7 +173,16 @@ export default function Navbar({ keycloak }) {
             </div>
           </div>
 
-
+          {/* Center links for public home */}
+          {!keycloak?.authenticated && isHome && (
+            <div className="hidden md:flex items-center gap-8 text-sm text-slate-600">
+              <a href="#home" className="hover:text-emerald-600">Home</a>
+              <a href="#about" className="hover:text-emerald-600">About</a>
+              <a href="#services" className="hover:text-emerald-600">Services</a>
+              <a href="#company" className="hover:text-emerald-600">Company</a>
+              <a href="#contact" className="hover:text-emerald-600">Contact</a>
+            </div>
+          )}
 
           {/* Right side: primary actions + profile */}
           <div className="flex items-center space-x-3">
@@ -305,7 +321,7 @@ export default function Navbar({ keycloak }) {
             ) : (
               <button
                 onClick={() => keycloak.login()}
-                className="px-5 py-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-sm font-semibold shadow-lg transition-all duration-200 relative overflow-hidden group"
+                className="px-5 py-2 rounded-full bg-gradient-to-r from-[#3B82F6] to-[#7C3AED] hover:from-[#2563EB] hover:to-[#6D28D9] text-white text-sm font-semibold shadow-lg transition-all duration-200 relative overflow-hidden group"
               >
                 <span className="relative z-10">Get started</span>
                 <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></div>

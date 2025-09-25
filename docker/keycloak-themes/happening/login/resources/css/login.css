@@ -26,12 +26,91 @@ body {
     padding: 32px 16px;
 }
 
+/* Hero art similar to landing page */
+.hk-art {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 320px;
+    background: radial-gradient(120% 90% at 70% 45%, rgba(147, 197, 253, 0.35) 0%, rgba(129, 140, 248, 0.28) 40%, rgba(59, 130, 246, 0.22) 100%);
+}
+
+/* New blended layout wrapper */
+.hk-page {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 32px;
+    align-items: center;
+    position: relative;
+}
+
+.hk-left {
+    display: none;
+}
+
+.hk-right {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hk-illustration {
+    display: none;
+}
+
+.hk-hero {
+    max-width: 640px;
+}
+
+.hk-pill {
+    display: inline-block;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 9999px;
+    background: rgba(124, 58, 237, 0.12);
+    color: #7C3AED;
+    margin-bottom: 12px;
+}
+
+.hk-title {
+    font-size: 56px;
+    line-height: 1.05;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px 0;
+}
+
+.hk-subtitle {
+    font-size: 18px;
+    color: #334155;
+    margin: 0 0 16px 0;
+}
+
+.hk-points {
+    margin: 0;
+    padding-left: 18px;
+    color: #334155;
+}
+
+.hk-points li {
+    margin-bottom: 6px;
+}
+
 /* Two-column layout with left brand for desktop */
 @media (min-width: 992px) {
     .login-pf-page {
         justify-content: center;
         padding-right: 6%;
         padding-left: 6%;
+    }
+
+    .hk-page {
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 64px;
+    }
+
+    .hk-left {
+        display: block;
     }
 
     /* Use Keycloak header as left brand column */
@@ -63,6 +142,33 @@ body {
         line-height: 1.25;
         font-weight: 500;
         text-align: left;
+    }
+}
+
+/* Illustration panel on the right to mirror landing hero */
+@media (min-width: 992px) {
+    .hk-illustration {
+        display: block;
+        width: 560px;
+        height: 380px;
+        background: url('../img/Hero1.jpg') center/cover no-repeat;
+        border-radius: 24px;
+        filter: drop-shadow(0 20px 40px rgba(15, 23, 42, .15));
+    }
+
+    .hk-page::after {
+        content: "";
+        position: absolute;
+        right: 3%;
+        top: 120px;
+        width: 560px;
+        height: 380px;
+        background: radial-gradient(120% 90% at 70% 45%, rgba(147, 197, 253, 0.15), rgba(129, 140, 248, 0.12));
+        border-radius: 24px;
+        filter: drop-shadow(0 20px 40px rgba(15, 23, 42, .15));
+        opacity: 0.95;
+        pointer-events: none;
+        z-index: 0;
     }
 }
 

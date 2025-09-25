@@ -23,8 +23,8 @@ export default function MyApp({ Component, pageProps }) {
         }
 
         const authenticated = await keycloak.init({
-          // Force login on initial load so '/' goes straight to Keycloak
-          onLoad: "login-required",
+          // Allow public landing page; only login when user clicks
+          onLoad: "check-sso",
           checkLoginIframe: false,
         });
 
