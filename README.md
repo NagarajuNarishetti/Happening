@@ -1,168 +1,103 @@
-<p align="center">
-  <img src="client/public/brand-logo.svg" alt="Happening Logo" width="80" />
-</p>
+## Happening — Multi‑Tenant Real‑Time Event Booking Platform
 
-# Happening – Multi‑Tenant Event Booking Platform
+This repository contains Happening, a multi‑tenant event booking platform (similar to BookMyShow/Eventbrite) featuring real‑time seat selection, coordinated waitlist promotion, notifications, and enterprise‑grade authentication.
 
-Happening lets organizations create and manage events while users book seats with real‑time availability and waitlist promotion.
+- **Architecture**: see `ABOUT_PROJECT/Architecture.md`
+- **Tech Stack & Rationale**: see `ABOUT_PROJECT/TechStack.md`
+- **How It Works (end‑to‑end flows)**: see `ABOUT_PROJECT/HowItWorks.md`
+- **Security & Authentication**: see `ABOUT_PROJECT/SecurityAuth.md`
+- **Design Decisions & Trade‑offs**: see `ABOUT_PROJECT/Decisions.md`
+- **Setup & Deployment**: see `ABOUT_PROJECT/SetupDeploy.md`
 
-Key links
-- Architecture: [ABOUT_PROJECT/Architecture.md](ABOUT_PROJECT/Architecture.md)
-- Tech stack: [ABOUT_PROJECT/TechStack.md](ABOUT_PROJECT/TechStack.md)
-- Frontend: [ABOUT_PROJECT/Frontend.md](ABOUT_PROJECT/Frontend.md)
-- Backend: [ABOUT_PROJECT/Backend.md](ABOUT_PROJECT/Backend.md)
-- Infrastructure: [ABOUT_PROJECT/Infrastructure.md](ABOUT_PROJECT/Infrastructure.md)
-- Operations: [ABOUT_PROJECT/Operations.md](ABOUT_PROJECT/Operations.md)
-- Full review (A→Z): [review.md](review.md)
-- Database schema: [server/sql/schema.sql](server/sql/schema.sql)
+### Key Capabilities
 
-Repository structure
-```
-happening/
-  client/            # Next.js app (UI)
-  server/            # Express API, routes, workers
-  docker/            # Local infra (Postgres, Redis, RabbitMQ, Keycloak)
-  ABOUT_PROJECT/     # Architecture and technology docs
-  README.md
-```
+- Multi‑tenant organizations, roles: orgAdmin, Organizer, User
+- Real‑time seat selection with live presence/status using WebSockets
+- FCFS waitlist with automatic promotion on cancellations
+- Notifications via RabbitMQ workers (email/SMS/push ready)
+- Source of truth in PostgreSQL with audit history
+- Keycloak authentication including social logins
 
-Getting started
-1) Start infra (dev):
-```bash
-cd docker
-docker compose up -d
-```
-2) Backend:
-```bash
-cd ../server
-npm install
-npm run dev
-```
-3) Frontend:
-```bash
-cd ../client
-npm install
-npm run dev
-```
+### Repository Overview (high‑level)
 
-Default ports
-- Client: http://localhost:3000
-- API: http://localhost:5000
-- RabbitMQ mgmt: http://localhost:15672 (happening/happening)
-- Keycloak: http://localhost:8080
-- Postgres: 5432, Redis: 6379
+- `client/`: Next.js app, Keycloak integration, seat selection UI
+- `server/`: Node.js backend (Express/Nest‑style structure), routes for bookings, events, organizations, notifications
+- `server/sql/`: schemas and improvements
+- `docker/`: local compose + Keycloak theme
+- `ABOUT_PROJECT/`: documentation and images
+
+### System Screens and Explanations
+
+Each image is included below with a short explanation of what it demonstrates.
+
+1) Customized login page (Keycloak) with social logins
+![Customized Login](./Images/cutomizedLoginPageWithSocialLoginsUsingKeyClock.png)
+Description: Users authenticate via Keycloak; Google/GitHub SSO supported. Upon first login, an organization can be created for the user.
+
+2) First page after login (home/dashboard)
+![First Page After Login](./Images/FirstPageAfterLogin.png)
+Description: Landing experience showing upcoming events, organization context, and quick actions.
+
+3) Home pages (marketing/summary sections)
+![Home Page 1](./Images/homePage1.png)
+Description: Marketing/overview page with platform value proposition.
+
+![Home Page 2](./Images/homePage2.png)
+Description: Additional highlights about features and user journeys.
+
+4) Create event section (Organizer workflow)
+![Create Event](./Images/CreateEventSection.png)
+Description: Organizers can define name, description, category, date/time, and total slots.
+
+5) Organizer dashboard
+![Organizer Dashboard](./Images/organizerDashBord.png)
+Description: View and manage events, see statuses, and open seat management modals.
+
+6) Organization switching
+![Switch Organizations](./Images/optoinToSwitchOrgs.png)
+Description: Users belonging to multiple orgs can switch context; role‑based access applies per org.
+
+7) Manage seats (Organizer)
+![Manage Seats](./Images/CanManageSeats.png)
+Description: Organizer tools for seat map configuration and maintenance.
+
+8) Book desired seats by selecting seat number (User)
+![Seat Selection](./Images/BookDesiredSeatsBySelectingSeatNumber.png)
+Description: Real‑time seat map allows selecting exact seats. Reservation logic is coordinated via Redis and confirmed in PostgreSQL.
+
+9) When a user selects seats, others see status instantly
+![Live Seat Status On Select](./Images/whenAnUserSelectsSeatsToBookItShowsStatusToOtherUsers.png)
+Description: WebSocket updates broadcast seat holds/selections to all connected users to avoid collision.
+
+10) When a user books, seats are frozen instantly for others (Socket.IO)
+![Seats Freeze On Book](./Images/WhenAnUserBooksTicketsThatSetsWillGetFreezedForOtherUsersInstantlyUsingSocketIo.png)
+Description: Confirmed seats become unavailable across clients in real‑time.
+
+11) Waitlist confirmation
+![Waitlist Confirmation](./Images/WatingConformation.png)
+Description: If the event is full, the booking is placed in a waitlist with a `waiting_number` for FCFS promotion.
+
+12) Waitlist visualization
+![Waitlist View](./Images/Wating01.png)
+Description: Users can see their waitlist status and current position.
+
+13) Track waiting status
+![Track Waiting Status](./Images/canTrackWatingStatus.png)
+Description: Users can monitor status changes; notifications are emitted on promotion.
+
+14) When other users cancel, your waitlisted booking is promoted automatically
+![Promotion On Cancel](./Images/WhenOtherUsersCancelTheirTicketsYouWillGetThoseSeatsAsPerYourWatingPosition.png)
+Description: Cancellation triggers Redis slot increment and FCFS promotion from the waitlist, with notifications.
+
+15) Cancellation success modal
+![Cancellation Success](./Images/CancelationSucessFullPopUpAfterCancelation.png)
+Description: Post‑cancel feedback to confirm the action and next steps.
+
+### Learn More
+
+- For the full architecture, data flows, and concurrency control, read `ABOUT_PROJECT/Architecture.md` and `ABOUT_PROJECT/HowItWorks.md`.
+- For stack details and why we chose them, see `ABOUT_PROJECT/TechStack.md` and `ABOUT_PROJECT/Decisions.md`.
+- For security, auth, and RBAC, see `ABOUT_PROJECT/SecurityAuth.md`.
+- To run locally or deploy, see `ABOUT_PROJECT/SetupDeploy.md`.
 
 
-Features
-- Multi‑tenant organizations with roles: orgAdmin, organizer, user
-- Event CRUD with categories and time; per‑seat selection and allocation
-- Concurrency‑safe bookings using Redis atomic counters
-- Automatic waitlist with promotion on cancellations
-- Asynchronous notifications via RabbitMQ worker
-- Keycloak authentication; role‑aware UI and API
-
-Database schema (summary)
-- organizations, users, organization_users(role)
-- events(id, org_id, total_slots, available_slots, status, ...)
-- bookings(event_id, user_id, seats, status, waiting_number, ...)
-- booking_seats(event_id, booking_id, user_id, seat_no, status)
-- booking_history(booking_id, action, details)
-- notifications(user_id, event_id, type, message, status)
-
-Redis keys
-- event:{eventId}:slots → remaining capacity (integer). DECRBY on booking, INCRBY on cancel.
-- event:{eventId}:waitlist → list of userIds. RPUSH on overflow, LPOP on promotion.
-
-RabbitMQ
-- Queue: notifications (durable)
-- Producers: API on booking confirmed/waitlisted/promoted
-- Consumer: server/workers/notificationsWorker.js
-
-API quick reference
-- Events: POST /events, GET /events, GET /events/:id, GET /events/:id/seats, PUT /events/:id, DELETE /events/:id
-- Bookings: POST /bookings, GET /bookings/user/:userId, POST /bookings/:id/cancel, POST /bookings/:id/cancel-seats
-- Orgs/Users/Invites: standard CRUD under /organizations, /users, /org-invites
-
-Demo flow
-1) Create an event (organizer role) with total slots
-2) Book seats via seat selection modal in the dashboard
-3) Over‑book to see waitlist behavior
-4) Cancel a booking or seats to trigger promotion
-5) Check RabbitMQ UI for notification activity
-
-Troubleshooting
-- API health: GET / (root) and GET /db-test
-- Redis: check counters and lists (docker exec into redis and use redis‑cli)
-- RabbitMQ: http://localhost:15672 (queue "notifications")
-
-
-
-<!-- Client overview -->
-
-![Client App](ABOUT_PROJECT/Images/happening-client.png)
-
-Small overview of the Next.js client home/dashboard with organization switcher, sections for Upcoming Events and Your Events.
-
-<!-- Server overview -->
-
-![Server App](ABOUT_PROJECT/Images/happening-server.png)
-
-High‑level look at the Express API and workers; routes handle events, bookings, organizations, and a background notifications worker.
-
-<!-- Login + Keycloak theme -->
-
-![Login with custom Keycloak theme](ABOUT_PROJECT/Images/LoginPageWithCustomeKeyClockThemeAndSocialLogins.png)
-
-Custom Keycloak theme branding with Google and GitHub social login buttons styled to brand colors.
-
-<!-- Create/host events (organizers) -->
-
-![Organizers can host events](ABOUT_PROJECT/Images/OrganisersCanHostEvents.png)
-
-Organizers create events specifying category, date/time, description and capacity. UI provides clear stats per event.
-
-<!-- Switch organization feature -->
-
-![Switch organization](ABOUT_PROJECT/Images/FeatureToSwitchOrganisation.png)
-
-Multi‑tenant navigation: quickly switch context to another organization’s workspace while keeping permissions scoped.
-
-<!-- Invitations -->
-
-![Invite to organization](ABOUT_PROJECT/Images/CanInviteToOrganizationAsUserAndOrganizer.png)
-
-Invite users to organizations as viewer/user or organizer; role determines capabilities in the workspace.
-
-<!-- Filters -->
-
-![Choose events using filters](ABOUT_PROJECT/Images/CanChooseEventsByApplyingFilters.png)
-
-Powerful filters for Upcoming/Your Events: by status (upcoming/completed), organization, and date sort.
-
-<!-- Seat selection + booking -->
-
-![Select and book seats](ABOUT_PROJECT/Images/SelectAndBookDesiredTickets.png)
-
-Per‑seat booking modal with live availability grid; pick exact seats or request a quantity.
-
-<!-- Waitlist behavior -->
-
-![Waitlist and FIFO assignment](ABOUT_PROJECT/Images/WhenSeatsAreFullAddedToWatingListAndLaterTicketsAssignedUsingFIFO.png)
-
-If demand exceeds supply, bookings join a waitlist. As seats free up, promotions happen first‑come‑first‑served and seat numbers are assigned.
-
-<!-- Manage / cancel seats -->
-
-![Cancel desired seats](ABOUT_PROJECT/Images/CanCancleTheDesiredSelectedTickets.png)
-
-Users can cancel specific seat numbers from their booking; availability updates instantly.
-
-![Manage all booked tickets](ABOUT_PROJECT/Images/CanManageAllBookedTickets.png)
-
-Grouped view of your bookings, with tools to view seat allocations and cancel per‑booking or per‑seat.
-
-<!-- Redis + RabbitMQ architecture note -->
-
-![Redis & RabbitMQ used for queuing and notifications](ABOUT_PROJECT/Images/UsedRedisAndRabbitMqForQueueAndNotificationsWhileAssigingSeats.png)
-
-Concurrency‑safe counters in Redis guarantee consistent availability. RabbitMQ drives notification events (confirmations, waitlist promotions).

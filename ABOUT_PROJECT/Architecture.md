@@ -1,40 +1,55 @@
-# Happening - Architecture Overview
+## Architecture
 
-This document describes how the Happening platform is put together and how data flows through it.
+Happening is a multi‑tenant, service‑oriented web application with a real‑time booking core. It combines PostgreSQL (source of truth), Redis (concurrency + waitlist), RabbitMQ (notifications), and Keycloak (AuthN/AuthZ) behind a web frontend (Next.js) and Node.js backend.
 
-## High-level components
-- Client (Next.js): authenticated UI with Keycloak. Pages for events, organizations, and switching org context.
-- API (Node.js/Express): REST for users, organizations, events, bookings, notifications.
-- PostgreSQL: source of truth for all entities, including per-seat allocations.
-- Redis: atomic counters for event slots and waitlist queues.
-- RabbitMQ: async notifications pipeline consumed by a worker.
-- Keycloak: identity provider and access control.
+### High‑Level Diagram (conceptual)
 
-## Key data flows
-### Create booking
-1. API attempts to decrement Redis key `event:{eventId}:slots` with DECRBY.
-2. If result >= 0, booking is confirmed; seats are assigned in `booking_seats`, and `events.available_slots` is decreased.
-3. If result < 0, the decrement is reverted and the user is appended to `event:{eventId}:waitlist`.
-4. API publishes a RabbitMQ message `booking_confirmed` or `booking_waitlisted`.
+- Client (Next.js) ↔ Backend API (Node.js)
+- Backend ↔ PostgreSQL (transactions, auditing)
+- Backend ↔ Redis (seat counters, locks, waitlist queue)
+- Backend → RabbitMQ (notification jobs) → Workers → Providers (email/SMS/push)
+- Backend ↔ Keycloak (OIDC/OAuth2, RBAC via tokens + DB roles)
+- Realtime: WebSocket/Socket.IO channel for seat map presence and updates
 
-### Cancel booking and promote waitlist
-1. API increases `event:{eventId}:slots` and `events.available_slots`.
-2. Pops next user from `event:{eventId}:waitlist` and promotes their booking, assigning the next available seat.
-3. Publishes `waitlist_promoted` notification.
+### Modules
 
-## Multi-tenancy and roles
-- Users belong to organizations with roles: orgAdmin, organizer, user.
-- UI can be filtered to a single org via `/switch/[id]`.
-- Role controls which sections are shown (organizer can manage events; user can book).
+- Organizations & RBAC: orgs, members, roles (orgAdmin, organizer, user)
+- Events: lifecycle (upcoming/ongoing/completed/cancelled), capacity
+- Bookings: seat selection, confirmation, waiting, cancellation
+- Waitlist: FCFS queue, promotion on cancellation
+- Notifications: durable events, async workers, status tracking
+- Auditing: booking_history and organizational audit events
 
-## Important tables
-- events (org_id, total_slots, available_slots, ...)
-- bookings (event_id, user_id, seats, status, waiting_number)
-- booking_seats (event_id, booking_id, user_id, seat_no, status)
-- booking_history (booking_id, action, details)
-- notifications (user_id, event_id, type, message, status)
+### Data Stores
 
-## Source locations
-- Client pages: `client/pages/media.js`, `client/pages/switch/[id].js`, `client/pages/organizations.js`.
-- API routes: `server/routes/events.js`, `server/routes/bookings.js`, `server/routes/organizations.js`, `server/routes/orgInvites.js`, `server/routes/users.js`, `server/routes/notifications.js`.
-- Integration: `server/config/redis.js`, `server/config/rabbitmq.js`, worker `server/workers/notificationsWorker.js`.
+- PostgreSQL: user/org/event/booking tables, history, notifications
+- Redis: `event:{eventId}:slots` (counter), `event:{eventId}:waitlist` (list), `booking:{eventId}:{userId}` (lock)
+- RabbitMQ: fanout/work queues for notification pipelines
+
+### Realtime Seat Coordination
+
+- Socket.IO room per event broadcasts:
+  - Seat selection/hold events
+  - Seat confirmation (freeze)
+  - Cancellations and promotions
+
+### Consistency Model
+
+- PostgreSQL is source of truth for bookings.
+- Redis is used for atomic counters and queue semantics; on divergence, DB reconciliation jobs ensure consistency.
+- All state transitions are recorded in `booking_history`.
+
+### Failure Scenarios & Handling
+
+- Worker failure: jobs remain pending; retries with backoff, dead‑letter queue if configured.
+- WebSocket disconnects: client resync on reconnect with server truth.
+- Double‑submit: Redis lock `booking:{eventId}:{userId}` with short TTL.
+
+### Code Map (repo)
+
+- Client (`client/`): components, pages, Keycloak integration
+- Server (`server/`): routes (`bookings.js`, `events.js`, `organizations.js`, `notifications.js`, `orgInvites.js`, `users.js`), workers (`notificationsWorker.js`), config (Redis, RabbitMQ, DB)
+- SQL (`server/sql/`): `schema_improved.sql`, `migration_to_improved.sql`, improvements notes
+- Docker (`docker/`): `docker-compose.yml`, Keycloak theme assets
+
+
