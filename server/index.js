@@ -91,7 +91,7 @@ io.on('connection', (socket) => {
       if (!eventId || !Array.isArray(seats)) return;
       const { getRedis } = require('./config/redis');
       const redis = getRedis();
-      const ttlSeconds = 20; // auto-expire holds
+      const ttlSeconds = 5; // Reduced to 5 seconds for auto-deselection
 
       // Save a set of seats held by this socket for clean-up
       const socketKey = `socket:${socket.id}:event:${eventId}`;
@@ -99,8 +99,20 @@ io.on('connection', (socket) => {
       const prevSeats = new Set(await redis.smembers(socketKey).then((arr) => arr.map((x) => Number(x))));
       const newSeats = new Set((seats || []).map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0));
 
-      // Add/update holds
+      // Check for conflicts - only allow seats that aren't already held by others
+      const allowedSeats = [];
       for (const seat of newSeats) {
+        const holdKey = `event:${eventId}:hold:${seat}`;
+        const currentOwner = await redis.get(holdKey);
+
+        // Allow if not held by anyone, or if held by this same socket
+        if (!currentOwner || currentOwner === socket.id) {
+          allowedSeats.push(seat);
+        }
+      }
+
+      // Add/update holds only for allowed seats
+      for (const seat of allowedSeats) {
         const holdKey = `event:${eventId}:hold:${seat}`;
         await redis.set(holdKey, socket.id, 'EX', ttlSeconds);
         await redis.sadd(socketKey, String(seat));
@@ -108,7 +120,7 @@ io.on('connection', (socket) => {
 
       // Remove holds no longer in the list (if still owned by this socket)
       for (const seat of prevSeats) {
-        if (!newSeats.has(seat)) {
+        if (!allowedSeats.includes(seat)) {
           const holdKey = `event:${eventId}:hold:${seat}`;
           const owner = await redis.get(holdKey);
           if (owner === socket.id) await redis.del(holdKey);
@@ -120,6 +132,14 @@ io.on('connection', (socket) => {
       const keys = await redis.keys(`event:${eventId}:hold:*`);
       const heldSeats = keys.map(k => Number(k.split(':').slice(-1)[0])).filter(n => Number.isFinite(n));
       io.to(`event:${eventId}`).emit('event:holds:update', { eventId, heldSeats });
+
+      // Send response to the requesting socket with allowed seats
+      socket.emit('event:holds:response', {
+        eventId,
+        requestedSeats: Array.from(newSeats),
+        allowedSeats,
+        conflicts: Array.from(newSeats).filter(s => !allowedSeats.includes(s))
+      });
     } catch (err) {
       console.warn('holds:set error', err.message);
     }
@@ -131,7 +151,7 @@ io.on('connection', (socket) => {
       if (!eventId) return;
       const { getRedis } = require('./config/redis');
       const redis = getRedis();
-      const ttlSeconds = 20;
+      const ttlSeconds = 5; // Consistent with holds:set TTL
       const socketKey = `socket:${socket.id}:event:${eventId}`;
       const seats = await redis.smembers(socketKey);
       for (const s of seats) {

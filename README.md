@@ -79,27 +79,31 @@ Description: Real‑time seat map allows selecting exact seats. Reservation logi
 ![Live Seat Status On Select](ABOUT_PROJECT/Images/whenAnUserSelectsSeatsToBookItShowsStatusToOtherUsers.png)
 Description: WebSocket updates broadcast seat holds/selections to all connected users to avoid collision.
 
-10) When a user books, seats are frozen instantly for others (Socket.IO)
+10) Seat freezing with auto-deselection to prevent spam holding
+![Frozen Selected Seats and Auto-Deselect](ABOUT_PROJECT/Images/FrozenSelectedSeatsAndAutoDeselectIfYouNotBookIn5SecsToAvoidSpamHolding.png)
+Description: When users select seats, they become frozen (orange, pulsing) for others. Selected seats automatically deselect after 5 seconds if not booked, preventing spam holding while ensuring fair access.
+
+11) When a user books, seats are frozen instantly for others (Socket.IO)
 ![Seats Freeze On Book](ABOUT_PROJECT/Images/WhenAnUserBooksTicketsThatSetsWillGetFreezedForOtherUsersInstantlyUsingSocketIo.png)
 Description: Confirmed seats become unavailable across clients in real‑time.
 
-11) Waitlist confirmation
+12) Waitlist confirmation
 ![Waitlist Confirmation](ABOUT_PROJECT/Images/WatingConformation.png)
 Description: If the event is full, the booking is placed in a waitlist with a `waiting_number` for FCFS promotion.
 
-12) Waitlist visualization
+13) Waitlist visualization
 ![Waitlist View](ABOUT_PROJECT/Images/Wating01.png)
 Description: Users can see their waitlist status and current position.
 
-13) Track waiting status
+14) Track waiting status
 ![Track Waiting Status](ABOUT_PROJECT/Images/canTrackWatingStatus.png)
 Description: Users can monitor status changes; notifications are emitted on promotion.
 
-14) When other users cancel, your waitlisted booking is promoted automatically
+15) When other users cancel, your waitlisted booking is promoted automatically
 ![Promotion On Cancel](ABOUT_PROJECT/Images/WhenOtherUsersCancelTheirTicketsYouWillGetThoseSeatsAsPerYourWatingPosition.png)
 Description: Cancellation triggers Redis slot increment and FCFS promotion from the waitlist, with notifications.
 
-15) Cancellation success modal
+16) Cancellation success modal
 ![Cancellation Success](ABOUT_PROJECT/Images/CancelationSucessFullPopUpAfterCancelation.png)
 Description: Post‑cancel feedback to confirm the action and next steps.
 
