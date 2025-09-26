@@ -14,23 +14,37 @@ export default function YourEvents({
     setMessage,
     setCancelCongratsData,
     setShowCancelCongrats,
-    fetchEvents
+    fetchEvents,
+    activeOrgId
 }) {
     if (!showYourEventsSection) return null;
 
     const [waitingPositions, setWaitingPositions] = useState(new Map()); // booking_id -> {position, loading}
     const pollingRef = useRef(null);
 
+    // Filter bookings by active organization if provided
+    const myBookingsFiltered = useMemo(() => {
+        const effectiveOrgId = activeOrgId ? String(activeOrgId) : null;
+        if (!effectiveOrgId) return myBookings;
+        const targetOrgId = effectiveOrgId;
+        const allowedEventIds = new Set(
+            events
+                .filter(e => String(e.org_id) === targetOrgId)
+                .map(e => String(e.id))
+        );
+        return myBookings.filter(b => allowedEventIds.has(String(b.event_id)));
+    }, [myBookings, activeOrgId, events]);
+
     const groupsMemo = useMemo(() => {
         const groups = new Map();
-        for (const b of myBookings) {
+        for (const b of myBookingsFiltered) {
             if (!groups.has(b.event_id)) groups.set(b.event_id, { event: b, bookings: [], totalSeats: 0 });
             const g = groups.get(b.event_id);
             g.bookings.push(b);
             g.totalSeats += Number(b.seats) || 0;
         }
         return groups;
-    }, [myBookings]);
+    }, [myBookingsFiltered]);
 
     const loadWaitingForEvent = async (group) => {
         // pick the first waiting booking for this event
@@ -68,12 +82,12 @@ export default function YourEvents({
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-6">
                         <h2 className="text-2xl font-bold text-gray-800 tracking-wide">Your Events</h2>
-                        <div className="text-sm text-gray-600">{myBookings.length} bookings</div>
+                        <div className="text-sm text-gray-600">{myBookingsFiltered.length} bookings</div>
                     </div>
                     <button onClick={() => fetchMyBookings(currentUserId)} className="px-4 py-2 bg-white/80 backdrop-blur-2xl border border-blue-200/50 rounded-xl text-sm font-medium text-gray-700 hover:text-gray-800 hover:bg-white transition-all duration-300 shadow-lg">Refresh</button>
                 </div>
 
-                {myBookings.length === 0 ? (
+                {myBookingsFiltered.length === 0 ? (
                     <div className="text-center py-10 bg-white/80 backdrop-blur-3xl rounded-2xl border border-blue-200/50 shadow">
                         <p className="text-gray-600">You haven't booked any events yet.</p>
                     </div>
@@ -81,14 +95,22 @@ export default function YourEvents({
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                         {(() => {
                             const groups = groupsMemo;
-                            const eventsById = new Map(events.map(e => [e.id, e]));
-                            const filtered = Array.from(groups.values()).sort((a, b) => {
-                                const da = new Date(a.event.event_date).getTime();
-                                const db = new Date(b.event.event_date).getTime();
-                                return db - da;
-                            });
+                            const eventsById = new Map(events.map(e => [String(e.id), e]));
+                            const targetOrgId = activeOrgId ? String(activeOrgId) : null;
+                            const filtered = Array.from(groups.values())
+                                .filter(g => {
+                                    if (!targetOrgId) return true;
+                                    const ev = eventsById.get(String(g.event.event_id));
+                                    if (!ev) return false; // if we don't know event org, hide under org filter
+                                    return String(ev.org_id) === targetOrgId;
+                                })
+                                .sort((a, b) => {
+                                    const da = new Date(a.event.event_date).getTime();
+                                    const db = new Date(b.event.event_date).getTime();
+                                    return db - da;
+                                });
                             return filtered.map(g => {
-                                const ev = eventsById.get(g.event.event_id);
+                                const ev = eventsById.get(String(g.event.event_id));
                                 const org = organizations.find(o => String(o.id) === String(ev?.org_id));
                                 const waitingBk = g.bookings.find(bk => String(bk.status).toLowerCase() === 'waiting');
                                 const waitingInfo = waitingBk ? waitingPositions.get(waitingBk.booking_id) : null;

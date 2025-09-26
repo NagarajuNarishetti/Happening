@@ -14,7 +14,7 @@ import CancelCongratsModal from "../components/media/CancelCongratsModal";
 import InvitationsButton from "../components/InvitationsButton";
 import { useRouter } from "next/router";
 
-export default function MediaPage({ keycloak }) {
+export default function HomeWorkspacePage({ keycloak }) {
     const [events, setEvents] = useState([]);
     const [organizations, setOrganizations] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -182,6 +182,37 @@ export default function MediaPage({ keycloak }) {
     };
     const showYourEventsSection = !isSwitchView || !isSwitchOrganizer;
 
+    // Build breadcrumb items for current view
+    const breadcrumbItems = useMemo(() => {
+        const items = [{ label: 'Home', href: '/home' }];
+        if (isSwitchView && switchedOrg?.name) {
+            items.push({ label: switchedOrg.name, href: `/switch/${encodeURIComponent(switchOrgId)}` });
+        }
+        if (showSeatSelect) {
+            items.push({ label: 'Booking' });
+        }
+        return items;
+    }, [isSwitchView, switchedOrg?.name, switchOrgId, showSeatSelect]);
+
+    const Breadcrumbs = () => (
+        <nav className="max-w-7xl mx-auto mt-4 px-8" aria-label="Breadcrumb">
+            <ol className="flex items-center text-sm text-slate-600">
+                {breadcrumbItems.map((item, idx) => (
+                    <li key={`bc-${idx}`} className="flex items-center">
+                        {idx > 0 && <span className="mx-2 text-slate-400">›</span>}
+                        {item.href ? (
+                            <a href={item.href} className="hover:text-indigo-600 font-medium">
+                                {item.label}
+                            </a>
+                        ) : (
+                            <span className="text-slate-800 font-semibold">{item.label}</span>
+                        )}
+                    </li>
+                ))}
+            </ol>
+        </nav>
+    );
+
     const getCurrentUser = async () => {
         if (!keycloak?.authenticated) return null;
         try {
@@ -317,6 +348,7 @@ export default function MediaPage({ keycloak }) {
     if (!isSwitchView) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 p-6">
+                <Breadcrumbs />
                 <div className="pt-10 px-8 pb-8">
                     <div className="max-w-7xl mx-auto">
                         <div className="mb-10">
@@ -372,6 +404,7 @@ export default function MediaPage({ keycloak }) {
     return (
         <>
             <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 p-6">
+                <Breadcrumbs />
                 <div className="pt-10 px-8 pb-2">
                     <div className="max-w-7xl mx-auto">
                         <div className="mb-10">
@@ -422,8 +455,6 @@ export default function MediaPage({ keycloak }) {
                     switchOrgId={switchOrgId}
                     upcomingStatus={upcomingStatus}
                     setUpcomingStatus={setUpcomingStatus}
-                    upcomingOrgFilter={upcomingOrgFilter}
-                    setUpcomingOrgFilter={setUpcomingOrgFilter}
                     upcomingSort={upcomingSort}
                     setUpcomingSort={setUpcomingSort}
                     organizations={organizations}
@@ -454,6 +485,7 @@ export default function MediaPage({ keycloak }) {
                     setCancelCongratsData={setCancelCongratsData}
                     setShowCancelCongrats={setShowCancelCongrats}
                     fetchEvents={fetchEvents}
+                    activeOrgId={isSwitchView ? switchOrgId : null}
                 />
 
                 {/* Events organized by you */}
@@ -599,3 +631,5 @@ export default function MediaPage({ keycloak }) {
         </>
     );
 }
+
+

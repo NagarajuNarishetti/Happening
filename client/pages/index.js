@@ -4,16 +4,16 @@ import { useRouter } from "next/router";
 
 export default function HomePage() {
     const keycloak = typeof window !== 'undefined' ? window.keycloak : null;
-    const handleLogin = () => keycloak?.login({ redirectUri: `${window.location.origin}/media` });
+    const handleLogin = () => keycloak?.login({ redirectUri: `${window.location.origin}/home` });
     const handleGoogleLogin = () => keycloak?.login({ idpHint: 'google' });
     const router = useRouter();
 
-    // If already authenticated, don't show landing page; go to /media
+    // If already authenticated, don't show landing page; go to /home
     useEffect(() => {
         const redirectIfAuthenticated = () => {
             const kc = typeof window !== 'undefined' ? window.keycloak : null;
             if (kc?.authenticated) {
-                router.replace('/media');
+                router.replace('/home');
                 return true;
             }
             return false;

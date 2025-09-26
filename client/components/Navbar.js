@@ -17,6 +17,7 @@ export default function Navbar({ keycloak }) {
 
   const links = [];
   const isHome = router.pathname === '/';
+  const isHomeWorkspace = router.pathname === '/home';
 
   const loadPendingInvites = async () => {
     if (!keycloak?.authenticated || !keycloak?.tokenParsed?.sub) {
@@ -159,7 +160,7 @@ export default function Navbar({ keycloak }) {
             className="flex-shrink-0 cursor-pointer select-none group"
             onClick={() => {
               if (keycloak?.authenticated) {
-                router.push('/media');
+                router.push('/home');
               } else {
                 router.push('/');
               }
@@ -289,7 +290,7 @@ export default function Navbar({ keycloak }) {
                     </div>
                   )}
                 </div>
-                <InviteToOrgButton keycloak={keycloak} />
+                {isHomeWorkspace && <InviteToOrgButton keycloak={keycloak} />}
                 <InvitationsButton keycloak={keycloak} iconOnly />
               </>
             )}

@@ -1,7 +1,7 @@
-import MediaPage from "../media";
+import HomeWorkspacePage from "../home";
 
 export default function OrgSwitchPage(props) {
-    return <MediaPage {...props} />;
+    return <HomeWorkspacePage {...props} />;
 }
 
 

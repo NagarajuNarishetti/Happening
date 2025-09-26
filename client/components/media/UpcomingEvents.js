@@ -9,8 +9,6 @@ export default function UpcomingEvents({
     switchOrgId,
     upcomingStatus,
     setUpcomingStatus,
-    upcomingOrgFilter,
-    setUpcomingOrgFilter,
     upcomingSort,
     setUpcomingSort,
     organizations,
@@ -26,16 +24,16 @@ export default function UpcomingEvents({
 }) {
     if (!showUpcomingSection) return null;
 
-    const getOrgNameFromFilter = (orgFilter) => {
-        if (orgFilter === 'all') return 'all organizations';
-        const org = organizations.find(o => String(o.id) === String(orgFilter));
+    const getActiveOrgName = () => {
+        if (!isSwitchView) return 'all organizations';
+        const org = organizations.find(o => String(o.id) === String(switchOrgId));
         return org?.name || 'selected organization';
     };
 
     const getFilterDisplayText = () => {
         const statusText = upcomingStatus === 'all' ? 'all events' :
             upcomingStatus === 'upcoming' ? 'upcoming events' : 'completed events';
-        const orgText = getOrgNameFromFilter(upcomingOrgFilter);
+        const orgText = getActiveOrgName();
         const sortText = upcomingSort === 'dateAsc' ? 'date (ascending)' : 'date (descending)';
         return `${statusText} from ${orgText} sorted by ${sortText}`;
     };
@@ -56,12 +54,6 @@ export default function UpcomingEvents({
                         <option value="upcoming">Upcoming</option>
                         <option value="completed">Completed</option>
                     </select>
-                    <select value={upcomingOrgFilter} onChange={e => setUpcomingOrgFilter(e.target.value)} className="px-3 py-2 rounded-xl border bg-white text-sm">
-                        <option value="all">All organizations</option>
-                        {organizations.filter(o => userOrgIdsForBooking.has(o.id)).map(o => (
-                            <option key={`up-org-${o.id}`} value={String(o.id)}>{o.name}</option>
-                        ))}
-                    </select>
                     <select value={upcomingSort} onChange={e => setUpcomingSort(e.target.value)} className="px-3 py-2 rounded-xl border bg-white text-sm">
                         <option value="dateAsc">Date ↑</option>
                         <option value="dateDesc">Date ↓</option>
@@ -75,7 +67,7 @@ export default function UpcomingEvents({
                         </div>
                         <h3 className="text-xl font-bold text-gray-800 mb-4 tracking-wide">NO EVENTS FOUND</h3>
                         <p className="text-gray-600 mb-2 max-w-md mx-auto leading-relaxed">
-                            Currently no events for <span className="font-semibold text-gray-700">{getOrgNameFromFilter(upcomingOrgFilter)}</span> with your selected filters.
+                            Currently no events for <span className="font-semibold text-gray-700">{getActiveOrgName()}</span> with your selected filters.
                         </p>
                         <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
                             Filters: {getFilterDisplayText()}
@@ -95,7 +87,7 @@ export default function UpcomingEvents({
                                 if (upcomingStatus === 'completed') return dt && dt < now;
                                 return true;
                             })
-                            .filter(ev => upcomingOrgFilter === 'all' || String(ev.org_id) === String(upcomingOrgFilter))
+                            // org filter dropdown removed; rely solely on switch context
                             .sort((a, b) => {
                                 const da = new Date(a.event_date).getTime();
                                 const db = new Date(b.event_date).getTime();
