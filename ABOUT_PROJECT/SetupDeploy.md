@@ -11,7 +11,9 @@
    - `docker/docker-compose.yml` brings up PostgreSQL, Redis, RabbitMQ, and Keycloak.
 2. Configure environment variables in `server/env.txt` (copy to `.env` as needed).
 3. Install deps:
-   - From repo root: `npm install` (or install separately in `client/` and `server/`).
+   - Install separately in each package:
+     - `cd server && npm install`
+     - `cd ../client && npm install`
 4. Run backend:
    - `cd server && npm run dev` (or `npm start`).
 5. Run frontend:
@@ -19,7 +21,7 @@
 
 ### Database
 
-- Apply schema from `server/sql/schema_improved.sql` (or use provided migrations).
+- Apply schema from `server/sql/schema.sql`.
 
 ### Keycloak
 

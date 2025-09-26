@@ -13,8 +13,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+# We do not have a root package.json anymore; keep client/server lockfiles
+!/client/package-lock.json
+!/server/package-lock.json
 package-lock.json
-# If you prefer to commit lockfiles, remove the line above for the root and server/client ones
 
 # ---- Next.js (client) ----
 client/.next/
