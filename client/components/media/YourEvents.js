@@ -8,6 +8,8 @@ export default function YourEvents({
     organizations,
     events,
     API,
+    io,
+    socketRef,
     setManageSeats,
     setManageBooking,
     setShowManageSeatsModal,
@@ -21,6 +23,7 @@ export default function YourEvents({
 
     const [waitingPositions, setWaitingPositions] = useState(new Map()); // booking_id -> {position, loading}
     const pollingRef = useRef(null);
+    const socketsReadyRef = useRef(false);
 
     // Filter bookings by active organization if provided
     const myBookingsFiltered = useMemo(() => {
@@ -76,6 +79,31 @@ export default function YourEvents({
         return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
     }, [groupsMemo]);
 
+    // Realtime refresh when seats are freed or bookings are updated for the same event
+    useEffect(() => {
+        try {
+            if (!socketRef?.current) {
+                socketRef.current = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000');
+            }
+            const s = socketRef.current;
+            if (socketsReadyRef.current) return;
+            socketsReadyRef.current = true;
+            const eventIds = Array.from(new Set(myBookings.map(b => b.event_id))).filter(Boolean);
+            for (const eid of eventIds) { try { s.emit('event:join', { eventId: eid }); } catch { } }
+            const handleRefresh = ({ eventId }) => {
+                const watching = myBookings.some(b => String(b.event_id) === String(eventId));
+                if (!watching) return;
+                fetchMyBookings(currentUserId);
+            };
+            s.on('event:seats:freed', handleRefresh);
+            s.on('event:bookings:update', handleRefresh);
+            return () => {
+                s.off('event:seats:freed', handleRefresh);
+                s.off('event:bookings:update', handleRefresh);
+            };
+        } catch { }
+    }, [myBookings, currentUserId]);
+
     return (
         <div className="px-8 pb-12">
             <div className="max-w-7xl mx-auto">
@@ -115,22 +143,23 @@ export default function YourEvents({
                                 const waitingBk = g.bookings.find(bk => String(bk.status).toLowerCase() === 'waiting');
                                 const waitingInfo = waitingBk ? waitingPositions.get(waitingBk.booking_id) : null;
                                 return (
-                                    <div key={`event-${g.event.event_id}`} className="group relative rounded-2xl border border-indigo-200 bg-white shadow-2xl p-4">
-                                        <div className="flex items-start justify-between mb-1">
-                                            <div className="text-lg font-semibold text-gray-800">{g.event.event_name}</div>
+                                    <div key={`event-${g.event.event_id}`} className="group relative rounded-2xl border border-indigo-200 bg-white shadow-2xl p-4 flex flex-col h-full">
+                                        <div className="flex items-start justify-between mb-2 h-8">
+                                            <div className="text-lg font-semibold text-gray-800 line-clamp-1 pr-2">{g.event.event_name}</div>
                                             <span className="ml-3 shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200" title={org?.name || ''}>{org?.name || ''}</span>
                                         </div>
-                                        <div className="text-sm text-gray-600 mb-2 line-clamp-2">{g.event.event_description || 'No description'}</div>
-                                        <div className="text-xs text-gray-500 mb-2">
-                                            <span className="font-medium">Organizer:</span> {ev?.organizer_first_name && ev?.organizer_last_name
+                                        <div className="text-sm text-gray-600 mb-2 line-clamp-2 h-10 overflow-hidden">{g.event.event_description || 'No description'}</div>
+                                        <div className="text-xs text-gray-500 mb-2 h-5 flex items-center">
+                                            <span className="font-medium">Organizer:</span>
+                                            <span className="ml-1 truncate">{ev?.organizer_first_name && ev?.organizer_last_name
                                                 ? `${ev.organizer_first_name} ${ev.organizer_last_name}`
-                                                : ev?.organizer_username || 'Unknown'}
+                                                : ev?.organizer_username || 'Unknown'}</span>
                                         </div>
-                                        <div className="flex items-center justify-between text-sm text-gray-700">
+                                        <div className="flex items-center justify-between text-sm text-gray-700 h-6">
                                             <span>{g.event.category || 'event'}</span>
-                                            <span>{g.event.event_date ? new Date(g.event.event_date).toLocaleString() : ''}</span>
+                                            <span className="text-xs">{g.event.event_date ? new Date(g.event.event_date).toLocaleString() : ''}</span>
                                         </div>
-                                        <div className="flex items-center justify-between mt-3 text-xs text-gray-600">
+                                        <div className="flex items-center justify-between mt-3 text-xs text-gray-600 h-5">
                                             <span>Seats: {g.totalSeats}</span>
                                             {waitingBk ? (
                                                 <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">Waiting</span>
@@ -156,39 +185,21 @@ export default function YourEvents({
                                                 ) : null}
                                             </div>
                                         )}
-                                        <div className="mt-4 flex items-center gap-2">
-                                            <button onClick={async () => {
-                                                try {
-                                                    const seatLists = await Promise.all(g.bookings.map(async bk => {
-                                                        const res = await API.get(`/bookings/${bk.booking_id}/seats`);
-                                                        const arr = Array.isArray(res.data) ? res.data : [];
-                                                        return arr.map(x => ({ ...x, booking_id: bk.booking_id }));
-                                                    }));
-                                                    const merged = seatLists.flat();
-                                                    setManageSeats(merged);
-                                                    setManageBooking({ event_id: g.event.event_id, event_name: g.event.event_name, grouped: true, bookings: g.bookings });
-                                                    setShowManageSeatsModal(true);
-                                                } catch (e) {
-                                                    setMessage('❌ Failed to load seats: ' + (e.response?.data?.error || e.message));
-                                                }
+                                        <div className="mt-auto pt-4 flex items-center gap-2">
+                                            <button onClick={() => {
+                                                const bookingIds = g.bookings.map(b => b.booking_id).join(',');
+                                                const orgFromEvent = organizations.find(o => String(o.id) === String(ev?.org_id))?.id || activeOrgId;
+                                                const params = new URLSearchParams();
+                                                params.set('bks', bookingIds);
+                                                if (orgFromEvent) params.set('orgId', String(orgFromEvent));
+                                                if (currentUserId) params.set('uid', String(currentUserId));
+                                                try { window.location.assign(`/manage/${encodeURIComponent(g.event.event_id)}?${params.toString()}`); } catch (_) { }
                                             }} className="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold">View</button>
-                                            <button onClick={async () => {
-                                                try {
-                                                    const ok = window.confirm('Cancel all your seats for this event?');
-                                                    if (!ok) return;
-                                                    await Promise.all(g.bookings.map(bk => API.post(`/bookings/${bk.booking_id}/cancel`)));
-                                                    const totalSeats = g.bookings.reduce((sum, bk) => sum + (bk.seats || 0), 0);
-                                                    setCancelCongratsData({
-                                                        cancelled_seats: [],
-                                                        seat_count: totalSeats,
-                                                        remaining_seats: 0,
-                                                        event_name: g.event.event_name
-                                                    });
-                                                    setShowCancelCongrats(true);
-                                                    await Promise.all([fetchEvents(), fetchMyBookings(currentUserId)]);
-                                                } catch (e) {
-                                                    setMessage('❌ Failed to cancel: ' + (e.response?.data?.error || e.message));
-                                                }
+                                            <button onClick={() => {
+                                                const bookingIds = g.bookings.map(b => b.booking_id).join(',');
+                                                const orgFromEvent = organizations.find(o => String(o.id) === String(ev?.org_id))?.id || activeOrgId;
+                                                const orgSuffix = orgFromEvent ? `?bks=${encodeURIComponent(bookingIds)}&orgId=${encodeURIComponent(orgFromEvent)}` : `?bks=${encodeURIComponent(bookingIds)}`;
+                                                try { window.location.assign(`/cancel/${encodeURIComponent(g.event.event_id)}${orgSuffix}`); } catch (_) { }
                                             }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold">Cancel</button>
                                         </div>
                                     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export default function SeatSelectionModal({
     showSeatSelect,
@@ -20,8 +20,11 @@ export default function SeatSelectionModal({
     socketRef,
     io
 }) {
+    // Use a single global countdown that resets on last selection
     const timeoutRefs = useRef({});
     const heartbeatIntervalRef = useRef(null);
+    const [holdExpiresAt, setHoldExpiresAt] = useState(null);
+    const [secondsLeft, setSecondsLeft] = useState(null);
 
     // Auto-deselect seats after 5 seconds if not booked
     useEffect(() => {
@@ -33,30 +36,15 @@ export default function SeatSelectionModal({
         Object.values(timeoutRefs.current).forEach(clearTimeout);
         timeoutRefs.current = {};
 
-        // Set timeout for each selected seat
-        selectedSeats.forEach(seat => {
-            timeoutRefs.current[seat.seat_no] = setTimeout(() => {
-                // Auto-deselect the seat
-                const updatedSeats = seatSelect.seats.map(s =>
-                    s.seat_no === seat.seat_no ? { ...s, selected: false } : s
-                );
-                const selected = updatedSeats.filter(s => s.selected).map(s => s.seat_no);
+        // Instead of per-seat timers, use a single global expiry driven by selection changes
 
-                // Update local state
-                seatSelect.seats = updatedSeats;
-
-                // Clear holds for deselected seats
-                try {
-                    socketRef.current?.emit('event:holds:set', {
-                        eventId: seatSelect.event.id,
-                        seats: selected
-                    });
-                } catch { }
-
-                // Clear the timeout reference
-                delete timeoutRefs.current[seat.seat_no];
-            }, 5000); // 5 seconds
-        });
+        // Start/refresh global countdown display
+        if (selectedSeats.length > 0) {
+            setHoldExpiresAt(Date.now() + 10000);
+        } else {
+            setHoldExpiresAt(null);
+            setSecondsLeft(null);
+        }
 
         // Start heartbeat to keep holds alive while modal is open
         heartbeatIntervalRef.current = setInterval(() => {
@@ -75,6 +63,28 @@ export default function SeatSelectionModal({
             }
         };
     }, [showSeatSelect, seatSelect?.seats?.filter(s => s.selected).length]);
+
+    // Countdown ticker for visible 10→1 seconds and deselect all on expiry
+    useEffect(() => {
+        if (!holdExpiresAt) return;
+        const t = setInterval(() => {
+            const remainingMs = holdExpiresAt - Date.now();
+            const secs = Math.max(0, Math.ceil(remainingMs / 1000));
+            setSecondsLeft(secs);
+            if (remainingMs <= 0) {
+                clearInterval(t);
+                setSecondsLeft(null);
+                setHoldExpiresAt(null);
+                // Deselect all on expiry and notify server
+                const updated = seatSelect.seats.map(s => ({ ...s, selected: false }));
+                seatSelect.seats = updated;
+                try {
+                    socketRef.current?.emit('event:holds:set', { eventId: seatSelect.event.id, seats: [] });
+                } catch { }
+            }
+        }, 200);
+        return () => clearInterval(t);
+    }, [holdExpiresAt]);
 
     // Listen for seat hold responses
     useEffect(() => {
@@ -151,7 +161,7 @@ export default function SeatSelectionModal({
                     </div>
                 </div>
                 {Number(seatSelect.event.available_slots || 0) > 0 ? (
-                    <div className="text-sm text-gray-600 mb-3">Green = available, Dark green = your selection, Orange = frozen by others (5s timeout), Red = booked. Selected seats auto-deselect after 5 seconds if not booked.</div>
+                    <div className="text-sm text-gray-600 mb-3">Green = available, Dark green = your selection, Orange = frozen by others (10s timeout), Red = booked. Selected seats auto-deselect after 10 seconds if not booked.</div>
                 ) : (
                     <div className="mb-3 text-sm font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                         Sorry, currently all tickets are booked. If you want to stay on the waiting list, please choose the number of tickets you need. Note: if fewer seats become available than your request, we will allocate only that many to you.
@@ -170,6 +180,9 @@ export default function SeatSelectionModal({
                                 if (seatError) setSeatError("");
                             }} onWheel={(e) => { try { e.currentTarget.blur(); } catch (_) { } }} onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); } }} className="w-16 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
                             <span className="text-sm text-gray-600">Available: <span className="font-semibold text-green-600">{Number(seatSelect.event.available_slots) ?? 0}</span></span>
+                            {secondsLeft != null && (
+                                <span className="ml-3 text-sm font-semibold text-amber-700">Book in {secondsLeft}s or selection will be released</span>
+                            )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-600">
                             <div className="flex items-center gap-1">
@@ -214,12 +227,6 @@ export default function SeatSelectionModal({
                                         );
                                         const selected = nextSelected.filter(x => x.selected).map(x => x.seat_no);
 
-                                        // Clear timeout for deselected seat
-                                        if (!nextSelected.find(x => x.seat_no === s.seat_no)?.selected && timeoutRefs.current[s.seat_no]) {
-                                            clearTimeout(timeoutRefs.current[s.seat_no]);
-                                            delete timeoutRefs.current[s.seat_no];
-                                        }
-
                                         try {
                                             socketRef.current?.emit('event:holds:set', {
                                                 eventId: seatSelect.event.id,
@@ -229,14 +236,23 @@ export default function SeatSelectionModal({
 
                                         // set after emit for consistency
                                         seatSelect.seats = nextSelected;
+
+                                        // Reset global countdown when a new seat becomes selected
+                                        const justSelected = nextSelected.find(x => x.seat_no === s.seat_no)?.selected;
+                                        if (justSelected) {
+                                            setHoldExpiresAt(Date.now() + 10000);
+                                        } else if (selected.length === 0) {
+                                            setHoldExpiresAt(null);
+                                            setSecondsLeft(null);
+                                        }
                                     }}
                                     className={`px-2 py-1.5 text-xs font-medium rounded transition-all duration-200 ${isTaken
-                                            ? 'bg-red-100 text-red-700 cursor-not-allowed border border-red-200'
-                                            : isFrozen
-                                                ? 'bg-orange-100 text-orange-700 cursor-not-allowed border border-orange-300 animate-pulse'
-                                                : isSelected
-                                                    ? 'bg-emerald-600 text-white shadow-md transform scale-105'
-                                                    : 'bg-white text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 border border-emerald-200 hover:shadow-sm'
+                                        ? 'bg-red-100 text-red-700 cursor-not-allowed border border-red-200'
+                                        : isFrozen
+                                            ? 'bg-orange-100 text-orange-700 cursor-not-allowed border border-orange-300 animate-pulse'
+                                            : isSelected
+                                                ? 'bg-emerald-600 text-white shadow-md transform scale-105'
+                                                : 'bg-white text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 border border-emerald-200 hover:shadow-sm'
                                         }`}
                                     title={isFrozen ? 'This seat is being selected by another user' : ''}
                                 >

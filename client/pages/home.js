@@ -478,6 +478,8 @@ export default function HomeWorkspacePage({ keycloak }) {
                     organizations={organizations}
                     events={events}
                     API={API}
+                    io={io}
+                    socketRef={socketRef}
                     setManageSeats={setManageSeats}
                     setManageBooking={setManageBooking}
                     setShowManageSeatsModal={setShowManageSeatsModal}

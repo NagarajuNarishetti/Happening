@@ -117,47 +117,10 @@ export default function UpcomingEvents({
                                             <span>Available: {ev.available_slots}</span>
                                         </div>
                                         <div className="mt-auto flex items-center gap-2">
-                                            <button onClick={async () => {
+                                            <button onClick={() => {
                                                 try {
-                                                    const res = await API.get(`/events/${ev.id}/seats`);
-                                                    const { total, taken, held } = res.data || { total: ev.total_slots, taken: [], held: [] };
-                                                    const seats = Array.from({ length: total }, (_, i) => ({ seat_no: i + 1, taken: taken?.includes(i + 1), held: held?.includes(i + 1) }));
-                                                    setSeatSelect({ event: ev, seats });
-                                                    setDesiredSeatsInput("1");
-                                                    setSeatError("");
-                                                    setShowSeatSelect(true);
-                                                    if (!socketRef.current) {
-                                                        socketRef.current = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000');
-                                                    }
-                                                    socketRef.current.emit('event:join', { eventId: ev.id });
-                                                    socketRef.current.on('event:holds:update', ({ eventId, heldSeats }) => {
-                                                        if (String(eventId) !== String(ev.id)) return;
-                                                        setSeatSelect(prev => prev ? ({
-                                                            ...prev,
-                                                            seats: prev.seats.map(x => ({ ...x, held: Array.isArray(heldSeats) ? heldSeats.includes(x.seat_no) : x.held }))
-                                                        }) : prev);
-                                                    });
-                                                    socketRef.current.on('event:bookings:update', ({ eventId, bookedSeats }) => {
-                                                        if (String(eventId) !== String(ev.id)) return;
-                                                        const setBooked = new Set((bookedSeats || []).map(Number));
-                                                        setSeatSelect(prev => prev ? ({
-                                                            ...prev,
-                                                            event: { ...prev.event, available_slots: Math.max(0, Number(prev.event.available_slots || 0) - setBooked.size) },
-                                                            seats: prev.seats.map(x => setBooked.has(x.seat_no) ? ({ ...x, taken: true, selected: false }) : x)
-                                                        }) : prev);
-                                                    });
-                                                    socketRef.current.on('event:seats:freed', ({ eventId, freedSeats }) => {
-                                                        if (String(eventId) !== String(ev.id)) return;
-                                                        const setFreed = new Set((freedSeats || []).map(Number));
-                                                        setSeatSelect(prev => prev ? ({
-                                                            ...prev,
-                                                            event: { ...prev.event, available_slots: Number(prev.event.available_slots || 0) + setFreed.size },
-                                                            seats: prev.seats.map(x => setFreed.has(x.seat_no) ? ({ ...x, taken: false, held: false, selected: false }) : x)
-                                                        }) : prev);
-                                                    });
-                                                } catch (e) {
-                                                    setMessage('❌ Failed to load seats: ' + (e.response?.data?.error || e.message));
-                                                }
+                                                    window.location.assign(`/book/${encodeURIComponent(ev.id)}${isSwitchView ? `?orgId=${encodeURIComponent(switchOrgId)}` : ''}`);
+                                                } catch (_) { }
                                             }} className="px-3 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl text-sm font-semibold">Book tickets</button>
                                         </div>
                                     </div>

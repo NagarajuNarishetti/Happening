@@ -400,6 +400,7 @@ router.post('/:id/cancel-seats', async (req, res) => {
         await client.query('UPDATE events SET available_slots = available_slots + $1, updated_at = NOW() WHERE id=$2', [cancelledCount, booking.event_id]);
 
         const redis = getRedis();
+        const promotedSeatNos = [];
         let seatsRemainingToAllocate = cancelledCount;
         while (seatsRemainingToAllocate > 0) {
             const nextUserId = await redis.lpop(`event:${booking.event_id}:waitlist`);
@@ -437,6 +438,7 @@ router.post('/:id/cancel-seats', async (req, res) => {
                 while (taken.has(seat)) seat++;
                 await client.query("INSERT INTO booking_seats(event_id, booking_id, user_id, seat_no, status) VALUES($1,$2,$3,$4,'booked')", [booking.event_id, confirmedBookingId, nextUserId, seat]);
                 taken.add(seat);
+                promotedSeatNos.push(seat);
                 seat++;
                 allocated++;
             }
@@ -449,6 +451,14 @@ router.post('/:id/cancel-seats', async (req, res) => {
         try {
             const io = req.app.get('io');
             if (freedSeats.length > 0 && io) io.to(`event:${booking.event_id}`).emit('event:seats:freed', { eventId: booking.event_id, freedSeats });
+            if (promotedSeatNos.length > 0 && io) {
+                // Clear holds for newly booked seats and broadcast updates like full cancel route
+                for (const s of promotedSeatNos) { try { await redis.del(`event:${booking.event_id}:hold:${s}`); } catch { } }
+                const keys = await redis.keys(`event:${booking.event_id}:hold:*`);
+                const heldSeats = keys.map(k => Number(k.split(':').slice(-1)[0])).filter(n => Number.isFinite(n));
+                io.to(`event:${booking.event_id}`).emit('event:holds:update', { eventId: booking.event_id, heldSeats });
+                io.to(`event:${booking.event_id}`).emit('event:bookings:update', { eventId: booking.event_id, bookedSeats: promotedSeatNos });
+            }
         } catch { }
         res.json({ ok: true, cancelled: cancelledCount });
     } catch (err) {

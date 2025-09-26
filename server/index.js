@@ -91,7 +91,7 @@ io.on('connection', (socket) => {
       if (!eventId || !Array.isArray(seats)) return;
       const { getRedis } = require('./config/redis');
       const redis = getRedis();
-      const ttlSeconds = 5; // Reduced to 5 seconds for auto-deselection
+      const ttlSeconds = 10; // Increased to 10 seconds for auto-deselection
 
       // Save a set of seats held by this socket for clean-up
       const socketKey = `socket:${socket.id}:event:${eventId}`;
@@ -128,7 +128,7 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Broadcast updated held seats list
+      // Broadcast updated held seats list (compute by scanning keys)
       const keys = await redis.keys(`event:${eventId}:hold:*`);
       const heldSeats = keys.map(k => Number(k.split(':').slice(-1)[0])).filter(n => Number.isFinite(n));
       io.to(`event:${eventId}`).emit('event:holds:update', { eventId, heldSeats });
@@ -151,7 +151,7 @@ io.on('connection', (socket) => {
       if (!eventId) return;
       const { getRedis } = require('./config/redis');
       const redis = getRedis();
-      const ttlSeconds = 5; // Consistent with holds:set TTL
+      const ttlSeconds = 10; // Consistent with holds:set TTL
       const socketKey = `socket:${socket.id}:event:${eventId}`;
       const seats = await redis.smembers(socketKey);
       for (const s of seats) {
@@ -159,6 +159,22 @@ io.on('connection', (socket) => {
         const owner = await redis.get(holdKey);
         if (owner === socket.id) await redis.set(holdKey, socket.id, 'EX', ttlSeconds);
       }
+      // Always broadcast the latest held seats so other clients update after TTL expirations
+      const keys = await redis.keys(`event:${eventId}:hold:*`);
+      const heldSeats = keys.map(k => Number(k.split(':').slice(-1)[0])).filter(n => Number.isFinite(n));
+      io.to(`event:${eventId}`).emit('event:holds:update', { eventId, heldSeats });
+    } catch { }
+  });
+
+  // Allow a client to request a one-time synchronization of currently held seats
+  socket.on('event:holds:sync', async ({ eventId }) => {
+    try {
+      if (!eventId) return;
+      const { getRedis } = require('./config/redis');
+      const redis = getRedis();
+      const keys = await redis.keys(`event:${eventId}:hold:*`);
+      const heldSeats = keys.map(k => Number(k.split(':').slice(-1)[0])).filter(n => Number.isFinite(n));
+      socket.emit('event:holds:update', { eventId, heldSeats });
     } catch { }
   });
 
