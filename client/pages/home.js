@@ -615,7 +615,13 @@ export default function HomeWorkspacePage({ keycloak }) {
                 {
                     (!isSwitchView || isSwitchOrganizer) && (
                         <button
-                            onClick={() => setShowCreateModal(true)}
+                            onClick={() => {
+                                if (isSwitchView && isSwitchOrganizer && switchOrgId) {
+                                    router.push(`/create/${encodeURIComponent(switchOrgId)}`);
+                                } else {
+                                    setShowCreateModal(true);
+                                }
+                            }}
                             className="fixed bottom-6 right-6 z-[9000] px-5 py-3 rounded-2xl bg-indigo-600 text-white shadow-2xl hover:bg-indigo-700 text-sm font-semibold"
                             title="Create Event"
                         >

@@ -30,81 +30,127 @@ This repository contains Happening, a multi‑tenant event booking platform (sim
 
 ### System Screens and Explanations
 
-Each image is included below with a short explanation of what it demonstrates.
+Each image is centered with a subtle border. A short explanation appears below each image.
 
 1) Customized login page (Keycloak) with social logins
-![Customized Login](ABOUT_PROJECT/Images/cutomizedLoginPageWithSocialLoginsUsingKeyClock.png)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/cutomizedLoginPageWithSocialLoginsUsingKeyClock.png" alt="Customized Login" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Users authenticate via Keycloak; Google/GitHub SSO supported. Upon first login, an organization can be created for the user.
 
 Additional Keycloak client configuration references:
-![Keycloak Client - Frontend](ABOUT_PROJECT/Images/happening-client.png)
-![Keycloak Client - Backend](ABOUT_PROJECT/Images/happening-server.png)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/happening-client.png" alt="Keycloak Client - Frontend" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/happening-server.png" alt="Keycloak Client - Backend" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 
-2) First page after login (home/dashboard)
-![First Page After Login](ABOUT_PROJECT/Images/FirstPageAfterLogin.png)
+2) RabbitMQ Dashboard (notifications pipeline)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/RabbitMqDashBoard.png" alt="RabbitMQ Dashboard" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
+Description: RabbitMQ management UI showing node health, queues, exchanges, connections, and message rates used by the notifications worker.
+
+3) First page after login (home/dashboard)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/FirstPageAfterLogin.png" alt="First Page After Login" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Landing experience showing upcoming events, organization context, and quick actions.
 
-3) Home pages (marketing/summary sections)
-![Home Page 1](ABOUT_PROJECT/Images/homePage1.png)
+4) Home pages (marketing/summary sections)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/homePage1.png" alt="Home Page 1" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Marketing/overview page with platform value proposition.
 
-![Home Page 2](ABOUT_PROJECT/Images/homePage2.png)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/homePage2.png" alt="Home Page 2" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Additional highlights about features and user journeys.
 
-4) Create event section (Organizer workflow)
-![Create Event](ABOUT_PROJECT/Images/CreateEventSection.png)
+5) Create event section (Organizer workflow)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/CreateEventSection.png" alt="Create Event" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Organizers can define name, description, category, date/time, and total slots.
 
-5) Organizer dashboard
-![Organizer Dashboard](ABOUT_PROJECT/Images/organizerDashBord.png)
+6) Organizer dashboard
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/organizerDashBord.png" alt="Organizer Dashboard" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: View and manage events, see statuses, and open seat management modals.
 
-6) Organization switching
-![Switch Organizations](ABOUT_PROJECT/Images/optoinToSwitchOrgs.png)
+7) Organization switching
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/optoinToSwitchOrgs.png" alt="Switch Organizations" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Users belonging to multiple orgs can switch context; role‑based access applies per org.
 
-6a) Invite users to organization and assign roles
-![Invite Users To Org](ABOUT_PROJECT/Images/InviteUsersAsOrganizersAndUsersInOurOrganization.png)
+7a) Invite users to organization and assign roles
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/InviteUsersAsOrganizersAndUsersInOurOrganization.png" alt="Invite Users To Org" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Search users by username/email and assign role as `User` (book tickets) or `Organizer` (create & manage events); sends invite.
 
-7) Manage seats (Organizer)
-![Manage Seats](ABOUT_PROJECT/Images/CanManageSeats.png)
+8) Manage seats (Organizer)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/CanManageSeats.png" alt="Manage Seats" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Organizer tools for seat map configuration and maintenance.
 
-8) Book desired seats by selecting seat number (User)
-![Seat Selection](ABOUT_PROJECT/Images/BookDesiredSeatsBySelectingSeatNumber.png)
+9) Book desired seats by selecting seat number (User)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/BookDesiredSeatsBySelectingSeatNumber.png" alt="Seat Selection" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Real‑time seat map allows selecting exact seats. Reservation logic is coordinated via Redis and confirmed in PostgreSQL.
 
-9) When a user selects seats, others see status instantly
-![Live Seat Status On Select](ABOUT_PROJECT/Images/whenAnUserSelectsSeatsToBookItShowsStatusToOtherUsers.png)
+10) When a user selects seats, others see status instantly
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/whenAnUserSelectsSeatsToBookItShowsStatusToOtherUsers.png" alt="Live Seat Status On Select" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: WebSocket updates broadcast seat holds/selections to all connected users to avoid collision.
 
-10) Seat freezing with auto-deselection to prevent spam holding
-![Frozen Selected Seats and Auto-Deselect](ABOUT_PROJECT/Images/FrozenSelectedSeatsAndAutoDeselectIfYouNotBookIn5SecsToAvoidSpamHolding.png)
+11) Seat freezing with auto-deselection to prevent spam holding
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/FrozenSelectedSeatsAndAutoDeselectIfYouNotBookIn5SecsToAvoidSpamHolding.png" alt="Frozen Selected Seats and Auto-Deselect" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: When users select seats, they become frozen (orange, pulsing) for others. Selected seats automatically deselect after 5 seconds if not booked, preventing spam holding while ensuring fair access.
 
-11) When a user books, seats are frozen instantly for others (Socket.IO)
-![Seats Freeze On Book](ABOUT_PROJECT/Images/WhenAnUserBooksTicketsThatSetsWillGetFreezedForOtherUsersInstantlyUsingSocketIo.png)
+12) When a user books, seats are frozen instantly for others (Socket.IO)
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/WhenAnUserBooksTicketsThatSetsWillGetFreezedForOtherUsersInstantlyUsingSocketIo.png" alt="Seats Freeze On Book" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Confirmed seats become unavailable across clients in real‑time.
 
-12) Waitlist confirmation
-![Waitlist Confirmation](ABOUT_PROJECT/Images/WatingConformation.png)
+13) Waitlist confirmation
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/WatingConformation.png" alt="Waitlist Confirmation" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: If the event is full, the booking is placed in a waitlist with a `waiting_number` for FCFS promotion.
 
-13) Waitlist visualization
-![Waitlist View](ABOUT_PROJECT/Images/Wating01.png)
+14) Waitlist visualization
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/Wating01.png" alt="Waitlist View" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Users can see their waitlist status and current position.
 
-14) Track waiting status
-![Track Waiting Status](ABOUT_PROJECT/Images/canTrackWatingStatus.png)
+15) Track waiting status
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/canTrackWatingStatus.png" alt="Track Waiting Status" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Users can monitor status changes; notifications are emitted on promotion.
 
-15) When other users cancel, your waitlisted booking is promoted automatically
-![Promotion On Cancel](ABOUT_PROJECT/Images/WhenOtherUsersCancelTheirTicketsYouWillGetThoseSeatsAsPerYourWatingPosition.png)
+16) When other users cancel, your waitlisted booking is promoted automatically
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/WhenOtherUsersCancelTheirTicketsYouWillGetThoseSeatsAsPerYourWatingPosition.png" alt="Promotion On Cancel" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Cancellation triggers Redis slot increment and FCFS promotion from the waitlist, with notifications.
 
-16) Cancellation success modal
-![Cancellation Success](ABOUT_PROJECT/Images/CancelationSucessFullPopUpAfterCancelation.png)
+17) Cancellation success modal
+<div align="center">
+  <img src="ABOUT_PROJECT/Images/CancelationSucessFullPopUpAfterCancelation.png" alt="Cancellation Success" style="max-width:100%; border:1px solid #e5e7eb; border-radius:12px;">
+</div>
 Description: Post‑cancel feedback to confirm the action and next steps.
 
 ### Learn More
