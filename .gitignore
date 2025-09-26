@@ -62,4 +62,5 @@ docker/keycloak-themes/**/target/
 *.bak
 *.tmp
 
-
+# personal project explanation files
+review.md
