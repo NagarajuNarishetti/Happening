@@ -142,6 +142,11 @@ export default function YourEvents({
                                 const org = organizations.find(o => String(o.id) === String(ev?.org_id));
                                 const waitingBk = g.bookings.find(bk => String(bk.status).toLowerCase() === 'waiting');
                                 const waitingInfo = waitingBk ? waitingPositions.get(waitingBk.booking_id) : null;
+
+                                // Check if event is completed
+                                const eventDate = ev?.event_date ? new Date(ev.event_date).getTime() : 0;
+                                const now = Date.now();
+                                const isEventCompleted = eventDate && eventDate < now;
                                 return (
                                     <div key={`event-${g.event.event_id}`} className="group relative rounded-2xl border border-indigo-200 bg-white shadow-2xl p-4 flex flex-col h-full">
                                         <div className="flex items-start justify-between mb-2 h-8">
@@ -195,12 +200,17 @@ export default function YourEvents({
                                                 if (currentUserId) params.set('uid', String(currentUserId));
                                                 try { window.location.assign(`/manage/${encodeURIComponent(g.event.event_id)}?${params.toString()}`); } catch (_) { }
                                             }} className="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold">View</button>
-                                            <button onClick={() => {
-                                                const bookingIds = g.bookings.map(b => b.booking_id).join(',');
-                                                const orgFromEvent = organizations.find(o => String(o.id) === String(ev?.org_id))?.id || activeOrgId;
-                                                const orgSuffix = orgFromEvent ? `?bks=${encodeURIComponent(bookingIds)}&orgId=${encodeURIComponent(orgFromEvent)}` : `?bks=${encodeURIComponent(bookingIds)}`;
-                                                try { window.location.assign(`/cancel/${encodeURIComponent(g.event.event_id)}${orgSuffix}`); } catch (_) { }
-                                            }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold">Cancel</button>
+                                            {!isEventCompleted && (
+                                                <button onClick={() => {
+                                                    const bookingIds = g.bookings.map(b => b.booking_id).join(',');
+                                                    const orgFromEvent = organizations.find(o => String(o.id) === String(ev?.org_id))?.id || activeOrgId;
+                                                    const orgSuffix = orgFromEvent ? `?bks=${encodeURIComponent(bookingIds)}&orgId=${encodeURIComponent(orgFromEvent)}` : `?bks=${encodeURIComponent(bookingIds)}`;
+                                                    try { window.location.assign(`/cancel/${encodeURIComponent(g.event.event_id)}${orgSuffix}`); } catch (_) { }
+                                                }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold">Cancel</button>
+                                            )}
+                                            {isEventCompleted && (
+                                                <div className="px-3 py-1.5 text-xs rounded-lg bg-gray-100 text-gray-500 font-semibold">Event Completed</div>
+                                            )}
                                         </div>
                                     </div>
                                 );

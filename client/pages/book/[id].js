@@ -126,6 +126,11 @@ export default function BookPage({ keycloak }) {
 
     const selectedCount = useMemo(() => seats.filter(s => s.selected).length, [seats]);
 
+    // Check if event is completed
+    const eventDate = event?.event_date ? new Date(event.event_date).getTime() : 0;
+    const now = Date.now();
+    const isEventCompleted = eventDate && eventDate < now;
+
     const handleToggleSeat = (s) => {
         if (s.taken || (s.held && !s.selected)) return;
         const next = seats.map(x => x.seat_no === s.seat_no ? { ...x, selected: !x.selected } : x);
@@ -252,7 +257,11 @@ export default function BookPage({ keycloak }) {
                     </div>
                 )}
 
-                {Number(event?.available_slots || 0) > 0 ? (
+                {isEventCompleted ? (
+                    <div className="mb-3 text-sm font-medium text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        This event has already completed. Booking is no longer available.
+                    </div>
+                ) : Number(event?.available_slots || 0) > 0 ? (
                     <div className="text-sm text-gray-600 mb-3">Green = available, Dark green = your selection, Orange = frozen by others (10s timeout), Red = booked.</div>
                 ) : (
                     <div className="mb-3 text-sm font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -260,77 +269,93 @@ export default function BookPage({ keycloak }) {
                     </div>
                 )}
 
-                {seatError && (
-                    <div className="mb-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{seatError}</div>
+                {!isEventCompleted && (
+                    <>
+                        {seatError && (
+                            <div className="mb-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{seatError}</div>
+                        )}
+
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                    <label className="text-sm font-medium text-gray-700">How many seats?</label>
+                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={desiredSeatsInput} onChange={e => {
+                                        const onlyDigits = String(e.target.value || '').replace(/[^0-9]/g, '');
+                                        setDesiredSeatsInput(onlyDigits);
+                                        if (seatError) setSeatError("");
+                                    }} className="w-16 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
+                                    <span className="text-sm text-gray-600">Available: <span className="font-semibold text-green-600">{Number(event?.available_slots) ?? 0}</span></span>
+                                    {secondsLeft != null && (
+                                        <span className="ml-3 text-sm font-semibold text-amber-700">Book in {secondsLeft}s or selection will be released</span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-gray-600">
+                                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-green-200 rounded"></div><span>Available</span></div>
+                                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-600 rounded"></div><span>Selected</span></div>
+                                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-200 rounded animate-pulse"></div><span>Frozen</span></div>
+                                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-red-200 rounded"></div><span>Booked</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white border border-gray-200 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-sm font-semibold text-gray-800">Available Seats</h4>
+                                <div className="text-xs text-gray-500">{selectedCount} selected</div>
+                            </div>
+                            <div className="grid grid-cols-5 gap-1.5 max-h-[300px] overflow-auto p-2 border border-gray-100 rounded bg-gray-50">
+                                {seats.map(s => {
+                                    const isFrozen = s.held && !s.selected;
+                                    const isSelected = s.selected;
+                                    const isTaken = s.taken;
+                                    return (
+                                        <button key={s.seat_no} disabled={isTaken || isFrozen} onClick={() => handleToggleSeat(s)} className={`px-2 py-1.5 text-xs font-medium rounded transition-all duration-200 ${isTaken
+                                            ? 'bg-red-100 text-red-700 cursor-not-allowed border border-red-200'
+                                            : isFrozen
+                                                ? 'bg-orange-100 text-orange-700 cursor-not-allowed border border-orange-300 animate-pulse'
+                                                : isSelected
+                                                    ? 'bg-emerald-600 text-white shadow-md transform scale-105'
+                                                    : 'bg-white text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 border border-emerald-200 hover:shadow-sm'
+                                            }`} title={isFrozen ? 'This seat is being selected by another user' : ''}>{s.seat_no}</button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </>
                 )}
 
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                            <label className="text-sm font-medium text-gray-700">How many seats?</label>
-                            <input type="text" inputMode="numeric" pattern="[0-9]*" value={desiredSeatsInput} onChange={e => {
-                                const onlyDigits = String(e.target.value || '').replace(/[^0-9]/g, '');
-                                setDesiredSeatsInput(onlyDigits);
-                                if (seatError) setSeatError("");
-                            }} className="w-16 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
-                            <span className="text-sm text-gray-600">Available: <span className="font-semibold text-green-600">{Number(event?.available_slots) ?? 0}</span></span>
-                            {secondsLeft != null && (
-                                <span className="ml-3 text-sm font-semibold text-amber-700">Book in {secondsLeft}s or selection will be released</span>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-green-200 rounded"></div><span>Available</span></div>
-                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-600 rounded"></div><span>Selected</span></div>
-                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-200 rounded animate-pulse"></div><span>Frozen</span></div>
-                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-red-200 rounded"></div><span>Booked</span></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white border border-gray-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-gray-800">Available Seats</h4>
-                        <div className="text-xs text-gray-500">{selectedCount} selected</div>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1.5 max-h-[300px] overflow-auto p-2 border border-gray-100 rounded bg-gray-50">
-                        {seats.map(s => {
-                            const isFrozen = s.held && !s.selected;
-                            const isSelected = s.selected;
-                            const isTaken = s.taken;
-                            return (
-                                <button key={s.seat_no} disabled={isTaken || isFrozen} onClick={() => handleToggleSeat(s)} className={`px-2 py-1.5 text-xs font-medium rounded transition-all duration-200 ${isTaken
-                                    ? 'bg-red-100 text-red-700 cursor-not-allowed border border-red-200'
-                                    : isFrozen
-                                        ? 'bg-orange-100 text-orange-700 cursor-not-allowed border border-orange-300 animate-pulse'
-                                        : isSelected
-                                            ? 'bg-emerald-600 text-white shadow-md transform scale-105'
-                                            : 'bg-white text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 border border-emerald-200 hover:shadow-sm'
-                                    }`} title={isFrozen ? 'This seat is being selected by another user' : ''}>{s.seat_no}</button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                                <span className="text-sm font-medium text-gray-700">Selected: {selectedCount}</span>
+                {!isEventCompleted && (
+                    <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                                    <span className="text-sm font-medium text-gray-700">Selected: {selectedCount}</span>
+                                </div>
+                                {selectedCount > 0 && (
+                                    <div className="text-xs text-gray-500">Seats: {seats.filter(s => s.selected).map(s => s.seat_no).join(', ')}</div>
+                                )}
                             </div>
-                            {selectedCount > 0 && (
-                                <div className="text-xs text-gray-500">Seats: {seats.filter(s => s.selected).map(s => s.seat_no).join(', ')}</div>
-                            )}
+                            <div className="flex gap-2">
+                                <a href={orgId ? `/switch/${orgId}` : '/home'} className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</a>
+                                <button onClick={handleBook} disabled={bookingLoading} className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {bookingLoading ? 'Processing…' : 'Book Seats'}
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            <a href={orgId ? `/switch/${orgId}` : '/home'} className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</a>
-                            <button onClick={handleBook} disabled={bookingLoading} className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                {bookingLoading ? 'Processing…' : 'Book Seats'}
-                            </button>
+                        {message && <div className="mt-3 text-sm text-red-700">{message}</div>}
+                    </div>
+                )}
+
+                {isEventCompleted && (
+                    <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-center">
+                            <a href={orgId ? `/switch/${orgId}` : '/home'} className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-semibold transition-colors">
+                                Back to Home
+                            </a>
                         </div>
                     </div>
-                    {message && <div className="mt-3 text-sm text-red-700">{message}</div>}
-                </div>
+                )}
             </div>
             <CongratsModal showCongrats={showCongrats} setShowCongrats={(v) => { setShowCongrats(v); if (!v) { router.replace(`/switch/${encodeURIComponent(orgId || '')}`); } }} congratsData={congratsData} />
         </div>

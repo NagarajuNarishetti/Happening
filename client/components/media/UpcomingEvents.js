@@ -117,11 +117,16 @@ export default function UpcomingEvents({
                                             <span>Available: {ev.available_slots}</span>
                                         </div>
                                         <div className="mt-auto flex items-center gap-2">
-                                            <button onClick={() => {
-                                                try {
-                                                    window.location.assign(`/book/${encodeURIComponent(ev.id)}${isSwitchView ? `?orgId=${encodeURIComponent(switchOrgId)}` : ''}`);
-                                                } catch (_) { }
-                                            }} className="px-3 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl text-sm font-semibold">Book tickets</button>
+                                            {upcomingStatus === 'upcoming' && (
+                                                <button onClick={() => {
+                                                    try {
+                                                        window.location.assign(`/book/${encodeURIComponent(ev.id)}${isSwitchView ? `?orgId=${encodeURIComponent(switchOrgId)}` : ''}`);
+                                                    } catch (_) { }
+                                                }} className="px-3 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl text-sm font-semibold">Book tickets</button>
+                                            )}
+                                            {upcomingStatus === 'completed' && (
+                                                <div className="px-3 py-2 bg-gray-100 text-gray-500 rounded-xl text-sm font-semibold">Event Completed</div>
+                                            )}
                                         </div>
                                     </div>
                                 );

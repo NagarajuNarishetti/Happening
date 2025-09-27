@@ -9,6 +9,7 @@ export default function ManageBookingPage() {
     const { id, orgId, bks } = { id: router.query.id, orgId: router.query.orgId, bks: router.query.bks };
     const [seats, setSeats] = useState([]);
     const [eventName, setEventName] = useState('');
+    const [eventDate, setEventDate] = useState('');
     const [selected, setSelected] = useState(new Set());
     const [confirming, setConfirming] = useState(false);
     const [message, setMessage] = useState('');
@@ -23,6 +24,7 @@ export default function ManageBookingPage() {
                 const all = await API.get(`/events`);
                 const ev = (Array.isArray(all.data) ? all.data : []).find(e => String(e.id) === String(id));
                 setEventName(ev?.name || 'Event');
+                setEventDate(ev?.event_date || '');
                 const ids = String(bks || '').split(',').filter(Boolean);
                 const seatLists = await Promise.all(ids.map(async bid => {
                     const res = await API.get(`/bookings/${bid}/seats`);
@@ -79,6 +81,11 @@ export default function ManageBookingPage() {
         loadOrg();
     }, [orgId]);
 
+    // Check if event is completed
+    const eventDateTime = eventDate ? new Date(eventDate).getTime() : 0;
+    const now = Date.now();
+    const isEventCompleted = eventDateTime && eventDateTime < now;
+
     const crumbs = [
         { label: 'Home', href: '/home' },
         ...(orgId ? [{ label: orgName || 'Organization', href: `/switch/${orgId}` }] : []),
@@ -102,7 +109,66 @@ export default function ManageBookingPage() {
                     <h2 className="text-xl font-bold text-gray-800">{eventName} — Your Seats</h2>
                     <a href={orgId ? `/switch/${orgId}` : '/home'} className="text-sm text-gray-600 hover:text-gray-800">Back</a>
                 </div>
-                {seats.length === 0 ? (
+                {isEventCompleted ? (
+                    <div className="text-center py-8">
+                        <div className="mb-4 text-sm font-medium text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                            This event has already completed. Seat management is no longer available.
+                        </div>
+                        {seats.length > 0 && (
+                            <>
+                                <div className="text-sm text-gray-600 mb-3">Your booked seats for this completed event:</div>
+
+                                {/* Legend for completed events */}
+                                <div className="flex items-center justify-center gap-4 text-xs text-gray-600 mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="inline-block w-3 h-3 rounded bg-green-200 border border-green-300"></span>
+                                        <span>Booked</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="inline-block w-3 h-3 rounded bg-gray-100 border border-gray-300"></span>
+                                        <span>Cancelled</span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
+                                    {[...seats]
+                                        .sort((a, b) => {
+                                            const rank = (s) => {
+                                                const status = (s.status || '').toLowerCase();
+                                                if (status === 'booked') return 0; // show booked first
+                                                if (status === 'cancelled' || status === 'canceled') return 1; // cancelled at end
+                                                return 2; // anything else
+                                            };
+                                            const ra = rank(a);
+                                            const rb = rank(b);
+                                            if (ra !== rb) return ra - rb;
+                                            return Number(a.seat_no) - Number(b.seat_no);
+                                        })
+                                        .map((s) => {
+                                            const status = (s.status || 'booked').toLowerCase();
+                                            const isCancelled = status === 'cancelled' || status === 'canceled';
+                                            return (
+                                                <div
+                                                    key={`${s.booking_id}-${s.seat_no}`}
+                                                    className={`px-3 py-2 rounded-xl border text-sm font-semibold ${isCancelled
+                                                            ? 'bg-gray-50 border-gray-300 text-gray-500'
+                                                            : 'bg-green-50 border-green-300 text-green-700'
+                                                        }`}
+                                                >
+                                                    Seat {s.seat_no}
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </>
+                        )}
+                        <div className="flex items-center justify-center">
+                            <a href={orgId ? `/switch/${orgId}` : '/home'} className="px-6 py-2 rounded-xl bg-gray-600 hover:bg-gray-700 text-white font-semibold shadow">
+                                Back to Home
+                            </a>
+                        </div>
+                    </div>
+                ) : seats.length === 0 ? (
                     <div className="text-gray-600">No seats to display.</div>
                 ) : (
                     <>

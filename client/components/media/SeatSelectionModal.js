@@ -117,6 +117,12 @@ export default function SeatSelectionModal({
     }, [showSeatSelect, seatSelect?.event?.id]);
 
     if (!showSeatSelect || !seatSelect?.event) return null;
+
+    // Check if event is completed
+    const eventDate = seatSelect.event.event_date ? new Date(seatSelect.event.event_date).getTime() : 0;
+    const now = Date.now();
+    const isEventCompleted = eventDate && eventDate < now;
+
     return (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40" onClick={() => setShowSeatSelect(false)}></div>
@@ -160,171 +166,191 @@ export default function SeatSelectionModal({
                         </div>
                     </div>
                 </div>
-                {Number(seatSelect.event.available_slots || 0) > 0 ? (
+                {isEventCompleted ? (
+                    <div className="mb-3 text-sm font-medium text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        This event has already completed. Booking is no longer available.
+                    </div>
+                ) : Number(seatSelect.event.available_slots || 0) > 0 ? (
                     <div className="text-sm text-gray-600 mb-3">Green = available, Dark green = your selection, Orange = frozen by others (10s timeout), Red = booked. Selected seats auto-deselect after 10 seconds if not booked.</div>
                 ) : (
                     <div className="mb-3 text-sm font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                         Sorry, currently all tickets are booked. If you want to stay on the waiting list, please choose the number of tickets you need. Note: if fewer seats become available than your request, we will allocate only that many to you.
                     </div>
                 )}
-                {seatError && (
-                    <div className="mb-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{seatError}</div>
-                )}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                            <label className="text-sm font-medium text-gray-700">How many seats?</label>
-                            <input type="text" inputMode="numeric" pattern="[0-9]*" value={desiredSeatsInput} onChange={e => {
-                                const onlyDigits = String(e.target.value || '').replace(/[^0-9]/g, '');
-                                setDesiredSeatsInput(onlyDigits);
-                                if (seatError) setSeatError("");
-                            }} onWheel={(e) => { try { e.currentTarget.blur(); } catch (_) { } }} onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); } }} className="w-16 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
-                            <span className="text-sm text-gray-600">Available: <span className="font-semibold text-green-600">{Number(seatSelect.event.available_slots) ?? 0}</span></span>
-                            {secondsLeft != null && (
-                                <span className="ml-3 text-sm font-semibold text-amber-700">Book in {secondsLeft}s or selection will be released</span>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                            <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-green-200 rounded"></div>
-                                <span>Available</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-emerald-600 rounded"></div>
-                                <span>Selected</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-orange-200 rounded animate-pulse"></div>
-                                <span>Frozen</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-red-200 rounded"></div>
-                                <span>Booked</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="bg-white border border-gray-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-gray-800">Available Seats</h4>
-                        <div className="text-xs text-gray-500">{seatSelect.seats.filter(s => s.selected).length} selected</div>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1.5 max-h-[300px] overflow-auto p-2 border border-gray-100 rounded bg-gray-50">
-                        {seatSelect.seats.map(s => {
-                            const isFrozen = s.held && !s.selected; // Held by someone else
-                            const isSelected = s.selected;
-                            const isTaken = s.taken;
-
-                            return (
-                                <button
-                                    key={s.seat_no}
-                                    disabled={isTaken || isFrozen}
-                                    onClick={() => {
-                                        if (isFrozen) return; // Prevent selecting frozen seats
-
-                                        const nextSelected = seatSelect.seats.map(x =>
-                                            x.seat_no === s.seat_no ? { ...x, selected: !x.selected } : x
-                                        );
-                                        const selected = nextSelected.filter(x => x.selected).map(x => x.seat_no);
-
-                                        try {
-                                            socketRef.current?.emit('event:holds:set', {
-                                                eventId: seatSelect.event.id,
-                                                seats: selected
-                                            });
-                                        } catch { }
-
-                                        // set after emit for consistency
-                                        seatSelect.seats = nextSelected;
-
-                                        // Reset global countdown when a new seat becomes selected
-                                        const justSelected = nextSelected.find(x => x.seat_no === s.seat_no)?.selected;
-                                        if (justSelected) {
-                                            setHoldExpiresAt(Date.now() + 10000);
-                                        } else if (selected.length === 0) {
-                                            setHoldExpiresAt(null);
-                                            setSecondsLeft(null);
-                                        }
-                                    }}
-                                    className={`px-2 py-1.5 text-xs font-medium rounded transition-all duration-200 ${isTaken
-                                        ? 'bg-red-100 text-red-700 cursor-not-allowed border border-red-200'
-                                        : isFrozen
-                                            ? 'bg-orange-100 text-orange-700 cursor-not-allowed border border-orange-300 animate-pulse'
-                                            : isSelected
-                                                ? 'bg-emerald-600 text-white shadow-md transform scale-105'
-                                                : 'bg-white text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 border border-emerald-200 hover:shadow-sm'
-                                        }`}
-                                    title={isFrozen ? 'This seat is being selected by another user' : ''}
-                                >
-                                    {s.seat_no}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-                <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                                <span className="text-sm font-medium text-gray-700">Selected: {seatSelect.seats.filter(s => s.selected).length}</span>
-                            </div>
-                            {seatSelect.seats.filter(s => s.selected).length > 0 && (
-                                <div className="text-xs text-gray-500">Seats: {seatSelect.seats.filter(s => s.selected).map(s => s.seat_no).join(', ')}</div>
-                            )}
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => { setSeatError(""); setShowSeatSelect(false); }} className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-                            <button onClick={async () => {
-                                const selected = seatSelect.seats.filter(s => s.selected).map(s => s.seat_no);
-                                const seatsToBook = Math.max(1, selected.length, Number(desiredSeatsInput) || 1);
-                                const remaining = Number(seatSelect.event.available_slots || 0);
-                                if (remaining > 0 && seatsToBook > remaining) {
-                                    setSeatError(`Sorry, we only have ${remaining} ticket${remaining === 1 ? '' : 's'} left.`);
-                                    return;
-                                }
-                                try {
-                                    setBookingLoading(true);
-
-                                    // Clear all timeouts before booking
-                                    Object.values(timeoutRefs.current).forEach(clearTimeout);
-                                    timeoutRefs.current = {};
-
-                                    const resp = await API.post('/bookings', { event_id: seatSelect.event.id, user_id: currentUserId, seats: seatsToBook, seat_numbers: selected });
-                                    setCongratsData({
-                                        status: resp?.data?.status || 'confirmed',
-                                        assigned_seats: resp?.data?.assigned_seats || [],
-                                        waiting_number: resp?.data?.waiting_number,
-                                        seats: seatsToBook,
-                                        event_name: seatSelect.event.name
-                                    });
-                                    setShowCongrats(true);
-                                    setShowSeatSelect(false);
-                                    try { socketRef.current?.emit('event:holds:clear', { eventId: seatSelect.event.id }); } catch { }
-                                    await Promise.all([fetchEvents(), fetchMyBookings(currentUserId)]);
-                                } catch (e) {
-                                    if (e.response?.status === 409 && e.response?.data?.error === 'seats_conflict') {
-                                        const unavailable = e.response.data.unavailable || [];
-                                        setMessage(`❌ Some seats were already booked: ${unavailable.join(', ')}`);
-                                    } else {
-                                        setMessage('❌ Failed to book: ' + (e.response?.data?.error || e.message));
-                                    }
-                                } finally {
-                                    setBookingLoading(false);
-                                }
-                            }} disabled={bookingLoading} className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                {bookingLoading ? (
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        <span>Processing...</span>
+                {!isEventCompleted && (
+                    <>
+                        {seatError && (
+                            <div className="mb-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{seatError}</div>
+                        )}
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                    <label className="text-sm font-medium text-gray-700">How many seats?</label>
+                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={desiredSeatsInput} onChange={e => {
+                                        const onlyDigits = String(e.target.value || '').replace(/[^0-9]/g, '');
+                                        setDesiredSeatsInput(onlyDigits);
+                                        if (seatError) setSeatError("");
+                                    }} onWheel={(e) => { try { e.currentTarget.blur(); } catch (_) { } }} onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); } }} className="w-16 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
+                                    <span className="text-sm text-gray-600">Available: <span className="font-semibold text-green-600">{Number(seatSelect.event.available_slots) ?? 0}</span></span>
+                                    {secondsLeft != null && (
+                                        <span className="ml-3 text-sm font-semibold text-amber-700">Book in {secondsLeft}s or selection will be released</span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-gray-600">
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-green-200 rounded"></div>
+                                        <span>Available</span>
                                     </div>
-                                ) : (
-                                    'Book Seats'
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-emerald-600 rounded"></div>
+                                        <span>Selected</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-orange-200 rounded animate-pulse"></div>
+                                        <span>Frozen</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-red-200 rounded"></div>
+                                        <span>Booked</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-sm font-semibold text-gray-800">Available Seats</h4>
+                                <div className="text-xs text-gray-500">{seatSelect.seats.filter(s => s.selected).length} selected</div>
+                            </div>
+                            <div className="grid grid-cols-5 gap-1.5 max-h-[300px] overflow-auto p-2 border border-gray-100 rounded bg-gray-50">
+                                {seatSelect.seats.map(s => {
+                                    const isFrozen = s.held && !s.selected; // Held by someone else
+                                    const isSelected = s.selected;
+                                    const isTaken = s.taken;
+
+                                    return (
+                                        <button
+                                            key={s.seat_no}
+                                            disabled={isTaken || isFrozen}
+                                            onClick={() => {
+                                                if (isFrozen) return; // Prevent selecting frozen seats
+
+                                                const nextSelected = seatSelect.seats.map(x =>
+                                                    x.seat_no === s.seat_no ? { ...x, selected: !x.selected } : x
+                                                );
+                                                const selected = nextSelected.filter(x => x.selected).map(x => x.seat_no);
+
+                                                try {
+                                                    socketRef.current?.emit('event:holds:set', {
+                                                        eventId: seatSelect.event.id,
+                                                        seats: selected
+                                                    });
+                                                } catch { }
+
+                                                // set after emit for consistency
+                                                seatSelect.seats = nextSelected;
+
+                                                // Reset global countdown when a new seat becomes selected
+                                                const justSelected = nextSelected.find(x => x.seat_no === s.seat_no)?.selected;
+                                                if (justSelected) {
+                                                    setHoldExpiresAt(Date.now() + 10000);
+                                                } else if (selected.length === 0) {
+                                                    setHoldExpiresAt(null);
+                                                    setSecondsLeft(null);
+                                                }
+                                            }}
+                                            className={`px-2 py-1.5 text-xs font-medium rounded transition-all duration-200 ${isTaken
+                                                ? 'bg-red-100 text-red-700 cursor-not-allowed border border-red-200'
+                                                : isFrozen
+                                                    ? 'bg-orange-100 text-orange-700 cursor-not-allowed border border-orange-300 animate-pulse'
+                                                    : isSelected
+                                                        ? 'bg-emerald-600 text-white shadow-md transform scale-105'
+                                                        : 'bg-white text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 border border-emerald-200 hover:shadow-sm'
+                                                }`}
+                                            title={isFrozen ? 'This seat is being selected by another user' : ''}
+                                        >
+                                            {s.seat_no}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
+                {!isEventCompleted && (
+                    <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                                    <span className="text-sm font-medium text-gray-700">Selected: {seatSelect.seats.filter(s => s.selected).length}</span>
+                                </div>
+                                {seatSelect.seats.filter(s => s.selected).length > 0 && (
+                                    <div className="text-xs text-gray-500">Seats: {seatSelect.seats.filter(s => s.selected).map(s => s.seat_no).join(', ')}</div>
                                 )}
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => { setSeatError(""); setShowSeatSelect(false); }} className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <button onClick={async () => {
+                                    const selected = seatSelect.seats.filter(s => s.selected).map(s => s.seat_no);
+                                    const seatsToBook = Math.max(1, selected.length, Number(desiredSeatsInput) || 1);
+                                    const remaining = Number(seatSelect.event.available_slots || 0);
+                                    if (remaining > 0 && seatsToBook > remaining) {
+                                        setSeatError(`Sorry, we only have ${remaining} ticket${remaining === 1 ? '' : 's'} left.`);
+                                        return;
+                                    }
+                                    try {
+                                        setBookingLoading(true);
+
+                                        // Clear all timeouts before booking
+                                        Object.values(timeoutRefs.current).forEach(clearTimeout);
+                                        timeoutRefs.current = {};
+
+                                        const resp = await API.post('/bookings', { event_id: seatSelect.event.id, user_id: currentUserId, seats: seatsToBook, seat_numbers: selected });
+                                        setCongratsData({
+                                            status: resp?.data?.status || 'confirmed',
+                                            assigned_seats: resp?.data?.assigned_seats || [],
+                                            waiting_number: resp?.data?.waiting_number,
+                                            seats: seatsToBook,
+                                            event_name: seatSelect.event.name
+                                        });
+                                        setShowCongrats(true);
+                                        setShowSeatSelect(false);
+                                        try { socketRef.current?.emit('event:holds:clear', { eventId: seatSelect.event.id }); } catch { }
+                                        await Promise.all([fetchEvents(), fetchMyBookings(currentUserId)]);
+                                    } catch (e) {
+                                        if (e.response?.status === 409 && e.response?.data?.error === 'seats_conflict') {
+                                            const unavailable = e.response.data.unavailable || [];
+                                            setMessage(`❌ Some seats were already booked: ${unavailable.join(', ')}`);
+                                        } else {
+                                            setMessage('❌ Failed to book: ' + (e.response?.data?.error || e.message));
+                                        }
+                                    } finally {
+                                        setBookingLoading(false);
+                                    }
+                                }} disabled={bookingLoading} className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {bookingLoading ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Processing...</span>
+                                        </div>
+                                    ) : (
+                                        'Book Seats'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isEventCompleted && (
+                    <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-center">
+                            <button onClick={() => setShowSeatSelect(false)} className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-semibold transition-colors">
+                                Close
                             </button>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );
