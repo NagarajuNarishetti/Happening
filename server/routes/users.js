@@ -224,6 +224,96 @@ const getKeycloakAdminToken = async () => {
   }
 };
 
+// Find an existing Keycloak Group by name (used as Organization container)
+const findGroupByName = async (accessToken, groupName) => {
+  try {
+    const response = await axios.get(
+      `${process.env.KEYCLOAK_SERVER_URL || "http://localhost:8080"}/admin/realms/${process.env.KEYCLOAK_REALM || "docsy"}/groups`,
+      {
+        params: { search: groupName },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+    const matched = (response.data || []).find(g => String(g.name).toLowerCase() === String(groupName).toLowerCase());
+    return matched || null;
+  } catch (err) {
+    console.warn("Failed to search Keycloak groups:", err?.response?.data || err.message);
+    return null;
+  }
+};
+
+// Create a Keycloak Group used to represent an Organization
+const createGroup = async (accessToken, groupName) => {
+  const url = `${process.env.KEYCLOAK_SERVER_URL || "http://localhost:8080"}/admin/realms/${process.env.KEYCLOAK_REALM || "docsy"}/groups`;
+  const payload = { name: groupName };
+  const resp = await axios.post(url, payload, { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } });
+  // Keycloak returns 201 with Location header pointing to the created group
+  if ((resp.status === 201 || resp.status === 204) && resp.headers.location) {
+    const parts = resp.headers.location.split('/');
+    const groupId = parts[parts.length - 1];
+    return { id: groupId, name: groupName };
+  }
+  // Fallback: refetch
+  const found = await findGroupByName(accessToken, groupName);
+  if (!found) throw new Error("Failed to create or locate Keycloak group");
+  return { id: found.id, name: found.name };
+};
+
+// Ensure a Keycloak Group exists and return its id
+const ensureGroup = async (accessToken, groupName) => {
+  const existing = await findGroupByName(accessToken, groupName);
+  if (existing?.id) return existing;
+  return await createGroup(accessToken, groupName);
+};
+
+// Add a Keycloak user to a Group (organization membership)
+const addUserToGroup = async (accessToken, keycloakUserId, groupId) => {
+  try {
+    const url = `${process.env.KEYCLOAK_SERVER_URL || "http://localhost:8080"}/admin/realms/${process.env.KEYCLOAK_REALM || "docsy"}/users/${keycloakUserId}/groups/${groupId}`;
+    const resp = await axios.put(url, {}, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (resp.status === 204) {
+      console.log("✅ Added user to Keycloak group", { keycloakUserId, groupId });
+    } else {
+      console.warn("⚠️ Unexpected status adding user to group:", resp.status);
+    }
+  } catch (err) {
+    // If already in group, Keycloak may still return 204. Log other errors
+    console.warn("Failed to add user to Keycloak group:", err?.response?.data || err.message);
+  }
+};
+
+// ---------- Keycloak Organizations API helpers ----------
+const createOrganization = async (accessToken, orgName, domain) => {
+  const base = process.env.KEYCLOAK_SERVER_URL || "http://localhost:8080";
+  const realm = process.env.KEYCLOAK_REALM || "docsy";
+  const url = `${base}/admin/realms/${realm}/organizations`;
+  const payload = { name: orgName, domains: Array.isArray(domain) ? domain : [domain] };
+  console.log("Creating Keycloak Organization", { url, payload });
+  const resp = await axios.post(url, payload, { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } });
+  console.log("Organization create response", { status: resp.status, headers: resp.headers, data: resp.data });
+  if (resp.status === 201) {
+    if (resp.data?.id) return resp.data.id;
+    if (resp.headers?.location) {
+      const parts = resp.headers.location.split('/');
+      return parts[parts.length - 1];
+    }
+  }
+  throw new Error(`Unexpected status from org create: ${resp.status}`);
+};
+
+const addMemberToOrganization = async (accessToken, orgId, keycloakUserId) => {
+  const base = process.env.KEYCLOAK_SERVER_URL || "http://localhost:8080";
+  const realm = process.env.KEYCLOAK_REALM || "docsy";
+  const url = `${base}/admin/realms/${realm}/organizations/${orgId}/members`;
+  const body = String(keycloakUserId);
+  console.log("Adding member to Organization", { url, body });
+  const resp = await axios.post(url, body, { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } });
+  console.log("Add member response", { status: resp.status, data: resp.data, headers: resp.headers });
+  if (resp.status !== 201 && resp.status !== 204) {
+    throw new Error(`Unexpected status from add member: ${resp.status}`);
+  }
+};
+
 // Function to check if user exists in Keycloak by their ID
 const checkUserExists = async (accessToken, keycloakId) => {
   try {
@@ -299,14 +389,17 @@ router.get("/", async (req, res) => {
 
 // POST /users
 router.post("/", async (req, res) => {
-  const { keycloak_id, username, email, role } = req.body;
+  // Username is intentionally ignored; we derive it from names/email
+  const { keycloak_id, email, role } = req.body;
+  const firstNameRaw = (req.body.first_name || "").trim();
+  const lastNameRaw = (req.body.last_name || "").trim();
 
-  // Validate required fields and UUID
-  if (!keycloak_id || !username || !email) {
-    console.warn("Invalid request:", { keycloak_id, username, email });
+  // Validate required fields and UUID (relaxed: only keycloak_id + email required)
+  if (!keycloak_id || !email) {
+    console.warn("Invalid request:", { keycloak_id, email });
     return res
       .status(400)
-      .json({ error: "Missing required fields: keycloak_id, username, email" });
+      .json({ error: "Missing required fields: keycloak_id, email" });
   }
   if (!isUuid(keycloak_id)) {
     console.warn("Invalid keycloak_id:", keycloak_id);
@@ -315,13 +408,36 @@ router.post("/", async (req, res) => {
       .json({ error: "Invalid keycloak_id: Must be a valid UUID" });
   }
 
+  // Derive a safe username from first/last name with fallbacks
+  const makeSlug = (s) => String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const givenSlug = makeSlug(firstNameRaw);
+  const familySlug = makeSlug(lastNameRaw);
+  let derivedUsername = [givenSlug, familySlug].filter(Boolean).join(".");
+  if (!derivedUsername) {
+    const emailUser = String(email).split("@")[0] || "user";
+    derivedUsername = makeSlug(emailUser);
+  }
+  const effectiveUsername = derivedUsername || "user";
+
   let clientInfo = null;
   let userId;
   let orgIdInDb;
   let kcOrgId = null;
 
+  // Normalize requested creator role; default to 'orgAdmin'
+  const normalizedCreatorRole = (() => {
+    const requested = String(role || '').trim().toLowerCase();
+    if (requested === 'organizer') return 'organizer';
+    if (requested === 'user') return 'user';
+    if (requested === 'orgadmin' || requested === 'org_admin' || requested === 'admin') return 'orgAdmin';
+    return 'orgAdmin';
+  })();
+
   try {
-    console.log("Starting user registration:", { keycloak_id, username });
+    console.log("Starting user registration:", { keycloak_id, username: effectiveUsername });
 
     // Create or update user first (outside transaction to ensure it's committed)
     const userRes = await pool.query(
@@ -330,7 +446,7 @@ router.post("/", async (req, res) => {
        ON CONFLICT (keycloak_id)
        DO UPDATE SET username = EXCLUDED.username, email = EXCLUDED.email, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, phone = EXCLUDED.phone, avatar_url = EXCLUDED.avatar_url, status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP
        RETURNING id, username`,
-      [keycloak_id, username, email, req.body.first_name || null, req.body.last_name || null, req.body.phone || null, req.body.avatar_url || null, 'active']
+      [keycloak_id, effectiveUsername, email, firstNameRaw || null, lastNameRaw || null, req.body.phone || null, req.body.avatar_url || null, 'active']
     );
     userId = userRes.rows[0].id;
     console.log("User created/updated:", { userId });
@@ -338,16 +454,19 @@ router.post("/", async (req, res) => {
     // Start transaction for organization operations
     await pool.query("BEGIN");
 
-    // Define and sanitize orgName
-    const orgName = sanitizeOrgName(`org-of-${username}`);
+    // Define and sanitize orgName preferring last name, else first name; fallback to email/user
+    const emailUserPart = String(email).split("@")[0] || effectiveUsername;
+    const nameForOrg = lastNameRaw || firstNameRaw || emailUserPart;
+    const baseOrgName = nameForOrg;
+    const orgName = sanitizeOrgName(baseOrgName);
     const domain = generateDomain(orgName); // e.g., org-of-demo19.org
 
-    // Create organization in Keycloak using Admin REST API
+    // Create organization in Keycloak using Organizations API
     try {
       const accessToken = await getKeycloakAdminToken();
       // CREATE CLIENT FOR USER
       try {
-        clientInfo = await createKeycloakClient(accessToken, username);
+        clientInfo = await createKeycloakClient(accessToken, effectiveUsername);
         console.log("✅ Client created for user:", clientInfo);
 
         // CREATE 3 DEFAULT ROLES FOR CLIENT
@@ -398,66 +517,36 @@ router.post("/", async (req, res) => {
       } catch (clientErr) {
         console.warn("⚠️ Client creation failed, proceeding without client:", {
           message: clientErr.message,
-          username: username,
+          username: effectiveUsername,
         });
       }
 
-      const orgResponse = await axios.post(
-        `${process.env.KEYCLOAK_SERVER_URL || "http://localhost:8080"}/admin/realms/${process.env.KEYCLOAK_REALM || "docsy"}/organizations`,
-        { name: orgName, domains: [domain] },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      console.log("Organization creation response:", {
-        status: orgResponse.status,
-        data: orgResponse.data,
-        headers: orgResponse.headers,
-      });
-
-      // Handle response: Check for 201 and extract ID from Location header if data is empty
-      if (orgResponse.status === 201) {
-        if (orgResponse.data && orgResponse.data.id) {
-          kcOrgId = orgResponse.data.id;
-        } else if (orgResponse.headers.location) {
-          const locationParts = orgResponse.headers.location.split("/");
-          kcOrgId = locationParts[locationParts.length - 1];
-        }
-        if (!kcOrgId) {
-          throw new Error("Failed to extract organization ID from response");
-        }
-        console.log("Keycloak organization created:", { orgId: kcOrgId });
-
-        // Check if user exists before adding as owner
+      try {
+        kcOrgId = await createOrganization(accessToken, orgName, domain);
+        console.log("✅ Keycloak Organization created", { kcOrgId, orgName, domain });
         const userExists = await checkUserExists(accessToken, keycloak_id);
         if (!userExists) {
-          console.warn(
-            "User does not exist in Keycloak, skipping membership assignment:",
-            { keycloak_id }
-          );
-        } else {
-          // Add user as OWNER in Keycloak
-          await axios.post(
-            `${process.env.KEYCLOAK_SERVER_URL || "http://localhost:8080"}/admin/realms/${process.env.KEYCLOAK_REALM || "docsy"}/organizations/${kcOrgId}/members`,
-
-            keycloak_id,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-            }
-          );
-          console.log("User added as member in Keycloak:", {
-            keycloak_id,
-            orgId: kcOrgId,
-          });
+          console.warn("User does not exist in Keycloak, skipping organization membership:", { keycloak_id });
+        } else if (kcOrgId) {
+          await addMemberToOrganization(accessToken, kcOrgId, keycloak_id);
+          console.log("✅ User added to Keycloak Organization", { keycloak_id, kcOrgId });
         }
-      } else {
-        throw new Error(`Unexpected status code: ${orgResponse.status}`);
+      } catch (orgErr) {
+        // If the Organizations API isn't available (404), fall back to Groups approach
+        if (orgErr?.response?.status === 404) {
+          console.warn("Organizations API not available (404). Falling back to Groups.");
+          const group = await ensureGroup(accessToken, orgName);
+          kcOrgId = group?.id || null;
+          const userExists = await checkUserExists(accessToken, keycloak_id);
+          if (!userExists) {
+            console.warn("User does not exist in Keycloak, skipping group membership:", { keycloak_id });
+          } else if (kcOrgId) {
+            await addUserToGroup(accessToken, keycloak_id, kcOrgId);
+            console.log("✅ User added to Keycloak Group", { keycloak_id, kcOrgId });
+          }
+        } else {
+          throw orgErr;
+        }
       }
     } catch (kcErr) {
       console.warn(
@@ -492,7 +581,7 @@ router.post("/", async (req, res) => {
         throw insertError;
       }
     }
-    const orgIdInDb = orgDbRes.rows[0].id;
+    orgIdInDb = orgDbRes.rows[0].id;
     console.log("PostgreSQL organization created:", { orgId: orgIdInDb });
 
     // Check if user is already in an organization
@@ -509,7 +598,7 @@ router.post("/", async (req, res) => {
       });
       orgIdInDb = existingMembership.rows[0].organization_id;
     } else {
-      // Insert user as orgAdmin in organization_users
+      // Insert user as orgAdmin in their own organization
       try {
         await pool.query(
           `INSERT INTO organization_users (organization_id, user_id, role)
@@ -532,7 +621,6 @@ router.post("/", async (req, res) => {
 
     res.status(201).json({
       id: userId,
-      username: userRes.rows[0].username,
       email: email,
       userId,
       organizationId: orgIdInDb,
