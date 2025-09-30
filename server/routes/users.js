@@ -464,7 +464,9 @@ router.post("/", async (req, res) => {
       const accessToken = await getKeycloakAdminToken();
       // CREATE CLIENT FOR USER
       try {
-        clientInfo = await createKeycloakClient(accessToken, effectiveUsername);
+        // Use email prefix for client naming: client-{emailPrefix}
+        const emailClientBase = sanitizeOrgName(String(email).split("@")[0] || "client");
+        clientInfo = await createKeycloakClient(accessToken, emailClientBase);
         console.log("✅ Client created for user:", clientInfo);
 
         // CREATE 3 DEFAULT ROLES FOR CLIENT
