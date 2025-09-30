@@ -454,12 +454,9 @@ router.post("/", async (req, res) => {
     // Start transaction for organization operations
     await pool.query("BEGIN");
 
-    // Define and sanitize orgName preferring last name, else first name; fallback to email/user
-    const emailUserPart = String(email).split("@")[0] || effectiveUsername;
-    const nameForOrg = lastNameRaw || firstNameRaw || emailUserPart;
-    const baseOrgName = nameForOrg;
-    const orgName = sanitizeOrgName(baseOrgName);
-    const domain = generateDomain(orgName); // e.g., org-of-demo19.org
+    // Define and sanitize orgName using username for better organization names
+    const orgName = sanitizeOrgName(effectiveUsername) + '.org';
+    const domain = generateDomain(orgName); // e.g., john.doe.org.org
 
     // Create organization in Keycloak using Organizations API
     try {
