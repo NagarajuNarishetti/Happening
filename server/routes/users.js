@@ -454,9 +454,10 @@ router.post("/", async (req, res) => {
     // Start transaction for organization operations
     await pool.query("BEGIN");
 
-    // Define and sanitize orgName using username for better organization names
-    const orgName = sanitizeOrgName(effectiveUsername) + '.org';
-    const domain = generateDomain(orgName); // e.g., john.doe.org.org
+    // Define organization name from email prefix (before '@')
+    const emailUserForOrg = String(email).split("@")[0] || "org";
+    const orgName = `org-of-${sanitizeOrgName(emailUserForOrg)}`;
+    const domain = generateDomain(orgName); // e.g., johndoe.org
 
     // Create organization in Keycloak using Organizations API
     try {
